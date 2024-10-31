@@ -17,7 +17,8 @@
 package cats.effect.benchmarks
 
 import cats.effect.ArrayStack
-import org.openjdk.jmh.annotations.*
+
+import org.openjdk.jmh.annotations._
 
 import java.util.concurrent.TimeUnit
 

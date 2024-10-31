@@ -36,7 +36,6 @@ import cats.{
   StackSafeMonad,
   Traverse
 }
-import cats.data.Ior
 import cats.effect.instances.spawn
 import cats.effect.kernel.CancelScope
 import cats.effect.kernel.GenTemporal.handleDuration
@@ -56,6 +55,8 @@ import java.util.UUID
 import java.util.concurrent.Executor
 
 import Platform.static
+
+import cats.data.Ior
 
 /**
  * A pure abstraction representing the intention to perform a side effect, where the result of

@@ -16,8 +16,9 @@
 
 package cats.effect
 
-import Platform.static
 import PlatformStatics.VM_MaxArraySize
+
+import Platform.static
 
 private[effect] final class ArrayStack[A <: AnyRef](
     private[this] var buffer: Array[AnyRef],
