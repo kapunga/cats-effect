@@ -49,10 +49,10 @@ class DispatcherJVMSpec extends BaseSpec {
       val res = Dispatcher.parallel[IO](await = true).evalMap { dispatcher =>
         for {
           canceled <- Deferred[IO, Unit]
-          io = IO.sleep(1.second).onCancel(IO.println("canceled") >> canceled.complete(()).void)
+          io = IO.sleep(1.second).onCancel(canceled.complete(()).void)
           thread = new Thread(() =>
             try dispatcher.unsafeRunSync(io)
-            catch { case _: InterruptedException => println("interrupted") })
+            catch { case _: InterruptedException => })
           _ <- IO(thread.start).as(thread)
           _ <- IO.sleep(100.millis)
           _ <- IO(thread.interrupt())
