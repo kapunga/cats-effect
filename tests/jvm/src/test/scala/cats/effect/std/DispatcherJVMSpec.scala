@@ -46,24 +46,21 @@ class DispatcherJVMSpec extends BaseSpec {
     }
 
     "Propagate Java thread interruption in unsafeRunSync" in real {
-      val res = Dispatcher.parallel[IO](await = true).evalMap { dispatcher =>
+      Dispatcher.parallel[IO](await = true).use { dispatcher =>
         for {
           canceled <- Deferred[IO, Unit]
           io = IO.sleep(1.second).onCancel(canceled.complete(()).void)
-          thread = new Thread(() =>
+          f <- IO.interruptible {
             try dispatcher.unsafeRunSync(io)
-            catch { case _: InterruptedException => })
-          _ <- IO(thread.start).as(thread)
+            catch { case _: InterruptedException => }
+          }.start
           _ <- IO.sleep(100.millis)
-          _ <- IO(thread.interrupt())
-          _ <- IO(thread.join())
+          _ <- f.cancel
           _ <- canceled
             .get
             .timeoutTo(300.millis, IO.raiseError(new Exception("io was not canceled")))
-        } yield ()
+        } yield ok
       }
-
-      res.use(_ => IO(ok))
     }
   }
 }
