@@ -59,10 +59,7 @@ private[std] trait DispatcherPlatform[F[_]] { this: Dispatcher[F] =>
     val (fut, cancel) = unsafeToFutureCancelable(fa)
     try Await.result(fut, timeout)
     catch {
-      case t: TimeoutException =>
-        cancel()
-        throw t
-      case t: InterruptedException =>
+      case t @ (_: TimeoutException | _: InterruptedException) =>
         cancel()
         throw t
     }
