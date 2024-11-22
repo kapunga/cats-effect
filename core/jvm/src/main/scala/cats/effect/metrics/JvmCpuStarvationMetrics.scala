@@ -27,7 +27,8 @@ import java.lang.management.ManagementFactory
 import javax.management.{MBeanServer, ObjectName}
 
 private[effect] object JvmCpuStarvationMetrics {
-  private[this] val mBeanObjectName = new ObjectName("cats.effect.metrics:type=CpuStarvation")
+  private[this] val mBeanObjectName = new ObjectName(
+    "cats.effect.unsafe.metrics:type=CpuStarvation")
 
   private[this] def warning(th: Throwable) = {
     val exceptionWriter = new StringWriter()
