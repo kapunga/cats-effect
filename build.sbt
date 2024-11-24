@@ -465,7 +465,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .settings(
     name := "cats-effect",
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-mtl" % CatsMtlVersion
+      "org.typelevel" %%% "cats-mtl" % CatsMtlVersion
     ),
     mimaBinaryIssueFilters ++= Seq(
       // introduced by #1837, removal of package private class
