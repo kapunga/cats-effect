@@ -240,7 +240,7 @@ sealed trait IOLocal[A] extends IOLocalPlatform[A] { self =>
    */
   def lens[B](get: A => B)(set: A => B => A): IOLocal[B]
 
-  final def toLocal: Local[IO, A] =
+  final def asLocal: Local[IO, A] =
     new Local[IO, A] {
       def applicative: Applicative[IO] =
         IO.asyncForIO

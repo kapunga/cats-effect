@@ -1950,7 +1950,7 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
     }
 
   def local[E](e: E): IO[cats.mtl.Local[IO, E]] =
-    IOLocal(e).map(_.toLocal)
+    IOLocal(e).map(_.asLocal)
 
   // instances
 
