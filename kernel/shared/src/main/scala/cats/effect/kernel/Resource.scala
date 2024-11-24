@@ -1303,7 +1303,7 @@ private[effect] trait ResourceHOInstances3 extends ResourceHOInstances4 {
 
 private[effect] trait ResourceHOInstances4 extends ResourceHOInstances5 {
   @deprecated(
-    "Bring an implicit MonadCancelThrow[F] into scope to get the fixed Resource instance",
+    "Use catsEffectMonadCancelForResource",
     "3.6.0")
   def catsEffectMonadErrorForResource[F[_], E](
       F0: MonadError[F, E]): MonadError[Resource[F, *], E] =
