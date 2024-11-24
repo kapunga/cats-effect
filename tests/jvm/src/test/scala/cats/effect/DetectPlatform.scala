@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,5 +19,9 @@ package cats.effect
 trait DetectPlatform {
   def isWSL: Boolean = System.getProperty("os.version").contains("-WSL")
   def isJS: Boolean = false
+  def isJVM: Boolean = true
   def isNative: Boolean = false
+
+  def javaMajorVersion: Int =
+    System.getProperty("java.version").stripPrefix("1.").takeWhile(_.isDigit).toInt
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,60 +19,64 @@ package cats.effect
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 private final class IODeferred[A] extends Deferred[IO, A] {
-  import IODeferred.Sentinel
 
-  private[this] val cell = new AtomicReference[AnyRef](Sentinel)
-  private[this] val callbacks = CallbackStack[Right[Nothing, A]](null)
+  private[this] val initial: IO[A] = {
+    val await = IO.asyncCheckAttempt[A] { cb =>
+      IO {
+        val handle = callbacks.push(cb)
+
+        def clear(): Unit = {
+          val removed = callbacks.clearHandle(handle)
+          if (!removed) {
+            val clearCount = clearCounter.incrementAndGet()
+            if ((clearCount & (clearCount - 1)) == 0) { // power of 2
+              clearCounter.addAndGet(-callbacks.pack(clearCount))
+              ()
+            }
+          }
+        }
+
+        val back = cell.get()
+        if (back eq initial) {
+          Left(Some(IO(clear())))
+        } else {
+          clear()
+          Right(back.asInstanceOf[IO.Pure[A]].value)
+        }
+      }
+    }
+
+    IO.defer {
+      val back = cell.get()
+      if (back eq initial)
+        await
+      else
+        back
+    }
+  }
+
+  private[this] val cell = new AtomicReference(initial)
+  private[this] val callbacks = CallbackStack.of[Right[Nothing, A]](null)
   private[this] val clearCounter = new AtomicInteger
 
   def complete(a: A): IO[Boolean] = IO {
-    if (cell.compareAndSet(Sentinel, a.asInstanceOf[AnyRef])) {
-      val _ = callbacks(Right(a), false)
-      callbacks.clear() // avoid leaks
+    if (cell.compareAndSet(initial, IO.pure(a))) {
+      val _ = callbacks(Right(a))
       true
     } else {
       false
     }
   }
 
-  def get: IO[A] = IO defer {
-    val back = cell.get()
-
-    if (back eq Sentinel) IO.asyncCheckAttempt { cb =>
-      IO {
-        val stack = callbacks.push(cb)
-        val handle = stack.currentHandle()
-
-        def clear(): Unit = {
-          stack.clearCurrent(handle)
-          val clearCount = clearCounter.incrementAndGet()
-          if ((clearCount & (clearCount - 1)) == 0) // power of 2
-            clearCounter.addAndGet(-callbacks.pack(clearCount))
-          ()
-        }
-
-        val back = cell.get()
-        if (back eq Sentinel) {
-          Left(Some(IO(clear())))
-        } else {
-          clear()
-          Right(back.asInstanceOf[A])
-        }
-      }
-    }
-    else
-      IO.pure(back.asInstanceOf[A])
-  }
+  def get: IO[A] = cell.get()
 
   def tryGet: IO[Option[A]] = IO {
     val back = cell.get()
-    if (back eq Sentinel)
+    if (back eq initial)
       None
     else
-      Some(back.asInstanceOf[A])
+      Some(back.asInstanceOf[IO.Pure[A]].value)
   }
 }
 
-private object IODeferred {
-  private val Sentinel = new AnyRef
-}
+private object IODeferred // bincompat shim

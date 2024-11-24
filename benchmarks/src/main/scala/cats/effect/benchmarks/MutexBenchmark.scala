@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package cats.effect.benchmarks
 import cats.effect.IO
 import cats.effect.std._
 import cats.effect.unsafe.implicits.global
-import cats.syntax.all._
 
 import org.openjdk.jmh.annotations._
 
@@ -56,12 +55,7 @@ class MutexBenchmark {
 
   @Benchmark
   def happyPathConcurrent(): Unit = {
-    happyPathImpl(mutex = Mutex.concurrent)
-  }
-
-  @Benchmark
-  def happyPathAsync(): Unit = {
-    happyPathImpl(mutex = Mutex.async)
+    happyPathImpl(mutex = Mutex.apply)
   }
 
   private def highContentionImpl(mutex: IO[Mutex[IO]]): Unit = {
@@ -73,12 +67,7 @@ class MutexBenchmark {
 
   @Benchmark
   def highContentionConcurrent(): Unit = {
-    highContentionImpl(mutex = Mutex.concurrent)
-  }
-
-  @Benchmark
-  def highContentionAsync(): Unit = {
-    highContentionImpl(mutex = Mutex.async)
+    highContentionImpl(mutex = Mutex.apply)
   }
 
   private def cancellationImpl(mutex: IO[Mutex[IO]]): Unit = {
@@ -94,11 +83,6 @@ class MutexBenchmark {
 
   @Benchmark
   def cancellationConcurrent(): Unit = {
-    cancellationImpl(mutex = Mutex.concurrent)
-  }
-
-  @Benchmark
-  def cancellationAsync(): Unit = {
-    cancellationImpl(mutex = Mutex.async)
+    cancellationImpl(mutex = Mutex.apply)
   }
 }

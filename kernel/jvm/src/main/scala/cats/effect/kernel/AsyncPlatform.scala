@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,17 +27,25 @@ private[kernel] trait AsyncPlatform[F[_]] extends Serializable { this: Async[F] 
   /**
    * Suspend a `java.util.concurrent.CompletableFuture` into the `F[_]` context.
    *
+   * @note
+   *   Cancelation is cooperative and it is up to the `CompletableFuture` to respond to the
+   *   request by handling cancelation appropriately and indicating that it has done so. This
+   *   means that if the `CompletableFuture` indicates that it did not cancel, there will be no
+   *   "fire-and-forget" semantics. Instead, to satisfy backpressure guarantees, the
+   *   `CompletableFuture` will be treated as if it is uncancelable and the fiber will fallback
+   *   to waiting for it to complete.
+   *
    * @param fut
    *   The `java.util.concurrent.CompletableFuture` to suspend in `F[_]`
    */
-  def fromCompletableFuture[A](fut: F[CompletableFuture[A]]): F[A] = flatMap(fut) { cf =>
-    cont {
-      new Cont[F, A, A] {
-        def apply[G[_]](
-            implicit
-            G: MonadCancelThrow[G]): (Either[Throwable, A] => Unit, G[A], F ~> G) => G[A] = {
-          (resume, get, lift) =>
-            G.uncancelable { poll =>
+  def fromCompletableFuture[A](fut: F[CompletableFuture[A]]): F[A] = cont {
+    new Cont[F, A, A] {
+      def apply[G[_]](
+          implicit
+          G: MonadCancelThrow[G]): (Either[Throwable, A] => Unit, G[A], F ~> G) => G[A] = {
+        (resume, get, lift) =>
+          G.uncancelable { poll =>
+            G.flatMap(poll(lift(fut))) { cf =>
               val go = delay {
                 cf.handle[Unit] {
                   case (a, null) => resume(Right(a))
@@ -57,7 +65,7 @@ private[kernel] trait AsyncPlatform[F[_]] extends Serializable { this: Async[F] 
 
               G.productR(lift(go))(await)
             }
-        }
+          }
       }
     }
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,18 @@ package cats.effect
 
 import cats.effect.implicits._
 import cats.effect.laws.AsyncTests
-import cats.effect.testkit.TestContext
+import cats.effect.testkit.{TestContext, TestControl}
 import cats.kernel.laws.SerializableLaws.serializable
 import cats.kernel.laws.discipline.MonoidTests
 import cats.laws.discipline.{AlignTests, SemigroupKTests}
 import cats.laws.discipline.arbitrary._
 import cats.syntax.all._
+import cats.~>
 
 import org.scalacheck.Prop
 import org.typelevel.discipline.specs2.mutable.Discipline
 
-import scala.concurrent.{CancellationException, ExecutionContext, TimeoutException}
+import scala.concurrent.{CancellationException, ExecutionContext, Promise, TimeoutException}
 import scala.concurrent.duration._
 
 import Prop.forAll
@@ -114,6 +115,26 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         (IO.pure(42) orElse IO.raiseError[Int](TestException)) must completeAs(42)
       }
 
+      "adaptError is a no-op for a successful effect" in ticked { implicit ticker =>
+        IO(42).adaptError { case x => x } must completeAs(42)
+      }
+
+      "adaptError is a no-op for a non-matching error" in ticked { implicit ticker =>
+        case object TestException1 extends RuntimeException
+        case object TestException2 extends RuntimeException
+        IO.raiseError[Unit](TestException1).adaptError {
+          case TestException2 => TestException2
+        } must failAs(TestException1)
+      }
+
+      "adaptError transforms the error in a failed effect" in ticked { implicit ticker =>
+        case object TestException1 extends RuntimeException
+        case object TestException2 extends RuntimeException
+        IO.raiseError[Unit](TestException1).adaptError {
+          case TestException1 => TestException2
+        } must failAs(TestException2)
+      }
+
       "attempt is redeem with Left(_) for recover and Right(_) for map" in ticked {
         implicit ticker =>
           forAll { (io: IO[Int]) => io.attempt eqv io.redeem(Left(_), Right(_)) }
@@ -122,6 +143,12 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
       "attempt is flattened redeemWith" in ticked { implicit ticker =>
         forAll { (io: IO[Int], recover: Throwable => IO[String], bind: Int => IO[String]) =>
           io.attempt.flatMap(_.fold(recover, bind)) eqv io.redeemWith(recover, bind)
+        }
+      }
+
+      "attemptTap(f) is an alias for attempt.flatTap(f).rethrow" in ticked { implicit ticker =>
+        forAll { (io: IO[Int], f: Either[Throwable, Int] => IO[Int]) =>
+          io.attemptTap(f) eqv io.attempt.flatTap(f).rethrow
         }
       }
 
@@ -322,6 +349,28 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         }
 
         action must completeAs(Nil)
+      }
+
+      "report errors raised during unsafeRunAndForget" in ticked { implicit ticker =>
+        import cats.effect.unsafe.IORuntime
+        import scala.concurrent.Promise
+
+        def ec2(ec1: ExecutionContext, er: Promise[Boolean]) = new ExecutionContext {
+          def reportFailure(t: Throwable) = er.success(true)
+          def execute(r: Runnable) = ec1.execute(r)
+        }
+
+        val test = for {
+          ec <- IO.executionContext
+          errorReporter <- IO(Promise[Boolean]())
+          customRuntime = IORuntime
+            .builder()
+            .setCompute(ec2(ec, errorReporter), () => ())
+            .build()
+          _ <- IO(IO.raiseError(new RuntimeException).unsafeRunAndForget()(customRuntime))
+          reported <- IO.fromFuture(IO(errorReporter.future))
+        } yield reported
+        test must completeAs(true)
       }
     }
 
@@ -586,6 +635,17 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         outerR mustEqual 1
         innerR mustEqual 2
       }
+
+      "be uncancelable if None finalizer" in ticked { implicit ticker =>
+        val t = IO.asyncCheckAttempt[Int] { _ => IO.pure(Left(None)) }
+        val test = for {
+          fib <- t.start
+          _ <- IO(ticker.ctx.tick())
+          _ <- fib.cancel
+        } yield ()
+
+        test must nonTerminate
+      }
     }
 
     "async" should {
@@ -826,6 +886,25 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         }
       }
 
+      "raceOutcome" should {
+        "cancel both fibers" in ticked { implicit ticker =>
+          (for {
+            l <- Ref.of[IO, Boolean](false)
+            r <- Ref.of[IO, Boolean](false)
+            fiber <-
+              IO.never[Int]
+                .onCancel(l.set(true))
+                .raceOutcome(IO.never[Int].onCancel(r.set(true)))
+                .start
+            _ <- IO(ticker.ctx.tick())
+            _ <- fiber.cancel
+            _ <- IO(ticker.ctx.tick())
+            l2 <- l.get
+            r2 <- r.get
+          } yield l2 -> r2) must completeAs(true -> true)
+        }
+      }
+
       "race" should {
         "succeed with faster side" in ticked { implicit ticker =>
           IO.race(IO.sleep(10.minutes) >> IO.pure(1), IO.pure(2)) must completeAs(Right(2))
@@ -866,24 +945,24 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
             Outcome.canceled[IO, Throwable, Unit])
         }
 
-        "succeed if lhs cancels" in ticked { implicit ticker =>
-          IO.race(IO.canceled, IO.pure(1)) must completeAs(Right(1))
+        "cancel if lhs cancels and rhs succeeds" in ticked { implicit ticker =>
+          IO.race(IO.canceled, IO.sleep(1.milli) *> IO.pure(1)).void must selfCancel
         }
 
-        "succeed if rhs cancels" in ticked { implicit ticker =>
-          IO.race(IO.pure(1), IO.canceled) must completeAs(Left(1))
+        "cancel if rhs cancels and lhs succeeds" in ticked { implicit ticker =>
+          IO.race(IO.sleep(1.milli) *> IO.pure(1), IO.canceled).void must selfCancel
         }
 
-        "fail if lhs cancels and rhs fails" in ticked { implicit ticker =>
+        "cancel if lhs cancels and rhs fails" in ticked { implicit ticker =>
           case object TestException extends Throwable
-          IO.race(IO.canceled, IO.raiseError[Unit](TestException)).void must failAs(
-            TestException)
+          IO.race(IO.canceled, IO.sleep(1.milli) *> IO.raiseError[Unit](TestException))
+            .void must selfCancel
         }
 
-        "fail if rhs cancels and lhs fails" in ticked { implicit ticker =>
+        "cancel if rhs cancels and lhs fails" in ticked { implicit ticker =>
           case object TestException extends Throwable
-          IO.race(IO.raiseError[Unit](TestException), IO.canceled).void must failAs(
-            TestException)
+          IO.race(IO.sleep(1.milli) *> IO.raiseError[Unit](TestException), IO.canceled)
+            .void must selfCancel
         }
 
         "cancel both fibers" in ticked { implicit ticker =>
@@ -910,6 +989,42 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
               res must beRight(())
             }
           }
+        }
+
+        "immediately cancel when timing out canceled" in real {
+          val program = IO.canceled.timeout(2.seconds)
+
+          val test = TestControl.execute(program.start.flatMap(_.join)) flatMap { ctl =>
+            ctl.tickFor(1.second) *> ctl.results
+          }
+
+          test flatMap { results =>
+            IO {
+              results must beLike { case Some(Outcome.Succeeded(Outcome.Canceled())) => ok }
+            }
+          }
+        }
+
+        "immediately cancel when timing out and forgetting canceled" in real {
+          val program = IO.canceled.timeoutAndForget(2.seconds)
+          val test = TestControl.execute(program.start.flatMap(_.join)) flatMap { ctl =>
+            ctl.tickFor(1.second) *> ctl.results
+          }
+
+          test flatMap { results =>
+            IO {
+              results must beLike { case Some(Outcome.Succeeded(Outcome.Canceled())) => ok }
+            }
+          }
+        }
+
+        "timeout a suspended timeoutAndForget" in real {
+          val program = IO.never.timeoutAndForget(2.seconds).timeout(1.second)
+          val test = TestControl.execute(program.start.flatMap(_.join)) flatMap { ctl =>
+            ctl.tickFor(1.second) *> ctl.results
+          }
+
+          test.flatMap(results => IO(results must beSome))
         }
 
         "return the left when racing against never" in ticked { implicit ticker =>
@@ -1045,6 +1160,39 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
           IO.uncancelable(_ =>
             IO.canceled >> IO.unit.onCancel(IO { failed = true })) must selfCancel
           failed must beFalse
+      }
+
+      "support re-enablement via cancelable" in ticked { implicit ticker =>
+        IO.deferred[Unit].flatMap { gate =>
+          val test = IO.deferred[Unit] flatMap { latch =>
+            (gate.complete(()) *> latch.get).uncancelable.cancelable(latch.complete(()).void)
+          }
+
+          test.start.flatMap(gate.get *> _.cancel)
+        } must completeAs(())
+      }
+
+      "cancelable waits for termination" in ticked { implicit ticker =>
+        def test(fin: IO[Unit]) = {
+          val go = IO.never.uncancelable.cancelable(fin)
+          go.start.flatMap(IO.sleep(1.second) *> _.cancel)
+        }
+
+        test(IO.unit) must nonTerminate
+        test(IO.raiseError(new Exception)) must nonTerminate
+        test(IO.canceled) must nonTerminate
+      }
+
+      "cancelable cancels task" in ticked { implicit ticker =>
+        def test(fin: IO[Unit]) =
+          IO.deferred[Unit].flatMap { latch =>
+            val go = IO.never[Unit].onCancel(latch.complete(()).void).cancelable(fin)
+            go.start.flatMap(IO.sleep(1.second) *> _.cancel) *> latch.get
+          }
+
+        test(IO.unit) must completeAs(())
+        test(IO.raiseError(new Exception)) must completeAs(())
+        test(IO.canceled) must completeAs(())
       }
 
       "only unmask within current fiber" in ticked { implicit ticker =>
@@ -1227,6 +1375,23 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         test must nonTerminate
       }
 
+      "catch stray exceptions in uncancelable" in ticked { implicit ticker =>
+        IO.uncancelable[Unit](_ => throw new RuntimeException).voidError must completeAs(())
+      }
+
+      "unmask following stray exceptions in uncancelable" in ticked { implicit ticker =>
+        IO.uncancelable[Unit](_ => throw new RuntimeException)
+          .handleErrorWith(_ => IO.canceled *> IO.never) must selfCancel
+      }
+
+      "catch exceptions in cont" in ticked { implicit ticker =>
+        IO.cont[Unit, Unit](new Cont[IO, Unit, Unit] {
+          override def apply[F[_]](implicit F: MonadCancel[F, Throwable])
+              : (Either[Throwable, Unit] => Unit, F[Unit], cats.effect.IO ~> F) => F[Unit] = {
+            (_, _, _) => throw new Exception
+          }
+        }).voidError must completeAs(())
+      }
     }
 
     "finalization" should {
@@ -1451,6 +1616,34 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
 
     }
 
+    "parTraverseN_" should {
+
+      "throw when n < 1" in real {
+        IO.defer {
+          List.empty[Int].parTraverseN_(0)(_.pure[IO])
+        }.mustFailWith[IllegalArgumentException]
+      }
+
+      "propagate errors" in real {
+        List(1, 2, 3)
+          .parTraverseN_(2) { (n: Int) =>
+            if (n == 2) IO.raiseError(new RuntimeException) else n.pure[IO]
+          }
+          .mustFailWith[RuntimeException]
+      }
+
+      "be cancelable" in ticked { implicit ticker =>
+        val p = for {
+          f <- List(1, 2, 3).parTraverseN_(2)(_ => IO.never).start
+          _ <- IO.sleep(100.millis)
+          _ <- f.cancel
+        } yield true
+
+        p must completeAs(true)
+      }
+
+    }
+
     "parallel" should {
       "run parallel actually in parallel" in real {
         val x = IO.sleep(2.seconds) >> IO.pure(1)
@@ -1470,6 +1663,81 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
           TestException)
         (IO.raiseError[Unit](TestException), IO.never[Unit]).parTupled.void must failAs(
           TestException)
+      }
+
+      "short-circuit on canceled" in ticked { implicit ticker =>
+        (IO.never[Unit], IO.canceled)
+          .parTupled
+          .start
+          .flatMap(_.join.map(_.isCanceled)) must completeAs(true)
+        (IO.canceled, IO.never[Unit])
+          .parTupled
+          .start
+          .flatMap(_.join.map(_.isCanceled)) must completeAs(true)
+      }
+
+      "run finalizers when canceled" in ticked { implicit ticker =>
+        val tsk = IO.ref(0).flatMap { ref =>
+          val t = IO.never[Unit].onCancel(ref.update(_ + 1))
+          for {
+            fib <- (t, t).parTupled.start
+            _ <- IO { ticker.ctx.tickAll() }
+            _ <- fib.cancel
+            c <- ref.get
+          } yield c
+        }
+
+        tsk must completeAs(2)
+      }
+
+      "run right side finalizer when canceled (and left side already completed)" in ticked {
+        implicit ticker =>
+          val tsk = IO.ref(0).flatMap { ref =>
+            for {
+              fib <- (IO.unit, IO.never[Unit].onCancel(ref.update(_ + 1))).parTupled.start
+              _ <- IO { ticker.ctx.tickAll() }
+              _ <- fib.cancel
+              c <- ref.get
+            } yield c
+          }
+
+          tsk must completeAs(1)
+      }
+
+      "run left side finalizer when canceled (and right side already completed)" in ticked {
+        implicit ticker =>
+          val tsk = IO.ref(0).flatMap { ref =>
+            for {
+              fib <- (IO.never[Unit].onCancel(ref.update(_ + 1)), IO.unit).parTupled.start
+              _ <- IO { ticker.ctx.tickAll() }
+              _ <- fib.cancel
+              c <- ref.get
+            } yield c
+          }
+
+          tsk must completeAs(1)
+      }
+
+      "complete if both sides complete" in ticked { implicit ticker =>
+        val tsk = (
+          IO.sleep(2.seconds).as(20),
+          IO.sleep(3.seconds).as(22)
+        ).parTupled.map { case (l, r) => l + r }
+
+        tsk must completeAs(42)
+      }
+
+      "not run forever on chained product" in ticked { implicit ticker =>
+        import cats.effect.kernel.Par.ParallelF
+
+        case object TestException extends RuntimeException
+
+        val fa: IO[String] = IO.pure("a")
+        val fb: IO[String] = IO.pure("b")
+        val fc: IO[Unit] = IO.raiseError[Unit](TestException)
+        val tsk =
+          ParallelF.value(ParallelF(fa).product(ParallelF(fb)).product(ParallelF(fc))).void
+        tsk must failAs(TestException)
       }
     }
 
@@ -1569,6 +1837,10 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         affected must beTrue
       }
 
+      "round up negative sleeps" in real {
+        IO.sleep(-1.seconds).as(ok)
+      }
+
       "timeout" should {
         "succeed" in real {
           val op = IO.pure(true).timeout(100.millis)
@@ -1604,6 +1876,23 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
         "non-terminate on an uncancelable fiber" in ticked { implicit ticker =>
           IO.never.uncancelable.timeout(1.second) must nonTerminate
         }
+
+        "propagate successful result from a completed effect" in real {
+          IO.pure(true).delayBy(50.millis).uncancelable.timeout(10.millis).map { res =>
+            res must beTrue
+          }
+        }
+
+        "propagate error from a completed effect" in real {
+          IO.raiseError(new RuntimeException)
+            .delayBy(50.millis)
+            .uncancelable
+            .timeout(10.millis)
+            .attempt
+            .map { res =>
+              res must beLike { case Left(e) => e must haveClass[RuntimeException] }
+            }
+        }
       }
 
       "timeoutTo" should {
@@ -1633,12 +1922,40 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
 
       "timeoutAndForget" should {
         "terminate on an uncancelable fiber" in real {
-          IO.never.uncancelable.timeoutAndForget(1.second).attempt flatMap { e =>
+          IO.never.uncancelable.timeoutAndForget(1.second).attempt flatMap { r =>
             IO {
-              e must beLike { case Left(e) => e must haveClass[TimeoutException] }
+              r must beLike { case Left(e) => e must haveClass[TimeoutException] }
             }
           }
         }
+      }
+
+      "no-op when canceling an expired timer 1" in realWithRuntime { rt =>
+        // this one excercises a timer removed via `TimerHeap#pollFirstIfTriggered`
+        IO(Promise[Unit]())
+          .flatMap { p =>
+            IO(rt.scheduler.sleep(1.nanosecond, () => p.success(()))).flatMap { cancel =>
+              IO.fromFuture(IO(p.future)) *> IO(cancel.run())
+            }
+          }
+          .as(ok)
+      }
+
+      "no-op when canceling an expired timer 2" in realWithRuntime { rt =>
+        // this one excercises a timer removed via `TimerHeap#insert`
+        IO(Promise[Unit]())
+          .flatMap { p =>
+            IO(rt.scheduler.sleep(1.nanosecond, () => p.success(()))).flatMap { cancel =>
+              IO.sleep(1.nanosecond) *> IO.fromFuture(IO(p.future)) *> IO(cancel.run())
+            }
+          }
+          .as(ok)
+      }
+
+      "no-op when canceling a timer twice" in realWithRuntime { rt =>
+        IO(rt.scheduler.sleep(1.day, () => ()))
+          .flatMap(cancel => IO(cancel.run()) *> IO(cancel.run()))
+          .as(ok)
       }
     }
 
@@ -1841,7 +2158,7 @@ class IOSpec extends BaseSpec with Discipline with IOPlatformSpecification {
     }
 
     "produce a specialized version of Deferred" in real {
-      IO.deferred[Unit].flatMap(d => IO((d must haveClass[IODeferred[_]]).pendingUntilFixed))
+      IO.deferred[Unit].flatMap(d => IO(d must haveClass[IODeferred[_]]))
     }
 
     platformSpecs

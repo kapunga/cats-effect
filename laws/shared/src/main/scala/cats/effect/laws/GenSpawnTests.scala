@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import cats.laws.discipline.SemigroupalTests.Isomorphisms
 import org.scalacheck._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.util.Pretty
+import org.typelevel.discipline.Laws
 
 trait GenSpawnTests[F[_], E] extends MonadCancelTests[F, E] with UniqueTests[F] {
 
@@ -68,7 +69,7 @@ trait GenSpawnTests[F[_], E] extends MonadCancelTests[F, E] with UniqueTests[F] 
     // these are the OLD LAWS retained only for bincompat
     new RuleSet {
       val name = "concurrent"
-      val bases = Nil
+      val bases: Seq[(String, Laws#RuleSet)] = Nil
       val parents = Seq(
         monadCancel[A, B, C](
           implicitly[Arbitrary[A]],
@@ -107,8 +108,6 @@ trait GenSpawnTests[F[_], E] extends MonadCancelTests[F, E] with UniqueTests[F] 
         "race derives from racePair (left)" -> forAll(laws.raceDerivesFromRacePairLeft[A, B] _),
         "race derives from racePair (right)" -> forAll(
           laws.raceDerivesFromRacePairRight[A, B] _),
-        "race canceled identity (left)" -> forAll(laws.raceCanceledIdentityLeft[A] _),
-        "race canceled identity (right)" -> forAll(laws.raceCanceledIdentityRight[A] _),
         "race never non-canceled identity (left)" -> forAll(
           laws.raceNeverNoncanceledIdentityLeft[A] _),
         "race never non-canceled identity (right)" -> forAll(
@@ -161,7 +160,7 @@ trait GenSpawnTests[F[_], E] extends MonadCancelTests[F, E] with UniqueTests[F] 
 
     new RuleSet {
       val name = "concurrent"
-      val bases = Nil
+      val bases: Seq[(String, Laws#RuleSet)] = Nil
       val parents = Seq(
         monadCancel[A, B, C](
           implicitly[Arbitrary[A]],
@@ -197,8 +196,6 @@ trait GenSpawnTests[F[_], E] extends MonadCancelTests[F, E] with UniqueTests[F] 
         "race derives from racePair (left)" -> forAll(laws.raceDerivesFromRacePairLeft[A, B] _),
         "race derives from racePair (right)" -> forAll(
           laws.raceDerivesFromRacePairRight[A, B] _),
-        "race canceled identity (left)" -> forAll(laws.raceCanceledIdentityLeft[A] _),
-        "race canceled identity (right)" -> forAll(laws.raceCanceledIdentityRight[A] _),
         "race never non-canceled identity (left)" -> forAll(
           laws.raceNeverNoncanceledIdentityLeft[A] _),
         "race never non-canceled identity (right)" -> forAll(

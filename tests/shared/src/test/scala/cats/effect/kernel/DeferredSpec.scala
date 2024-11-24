@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import cats.syntax.all._
 
 import scala.concurrent.duration._
 
-class DeferredSpec extends BaseSpec { outer =>
+class DeferredSpec extends BaseSpec with DetectPlatform { outer =>
 
   "Deferred for Async" should {
     tests(IO(Deferred.unsafe), IO(Deferred.unsafe))
@@ -180,7 +180,7 @@ class DeferredSpec extends BaseSpec { outer =>
                 d.get.as(1).parReplicateA(n).map(_.sum must be_==(n))
               }
             }
-            .replicateA_(100)
+            .replicateA_(if (isJVM) 100 else 1)
         }
         .as(true)
     }

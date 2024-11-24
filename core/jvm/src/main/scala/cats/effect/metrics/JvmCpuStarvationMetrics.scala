@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ private[effect] object JvmCpuStarvationMetrics {
         case (mbeanServer, _) => IO.blocking(mbeanServer.unregisterMBean(mBeanObjectName))
       }
       .map(_._2)
-      .handleErrorWith[CpuStarvationMetrics, Throwable] { th =>
+      .handleErrorWith[CpuStarvationMetrics] { th =>
         Resource.eval(Console[IO].errorln(warning(th))).map(_ => new NoOpCpuStarvationMetrics)
       }
   }

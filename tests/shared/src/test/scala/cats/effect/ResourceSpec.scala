@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -603,7 +603,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
       "propagate the exit case" in {
         import Resource.ExitCase
 
-        "use succesfully, test left" >> ticked { implicit ticker =>
+        "use successfully, test left" >> ticked { implicit ticker =>
           var got: ExitCase = null
           val r = Resource.onFinalizeCase(ec => IO { got = ec })
           r.both(Resource.unit).use(_ => IO.unit) must completeAs(())
@@ -725,7 +725,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
       "propagate the exit case" in {
         import Resource.ExitCase
 
-        "use succesfully, test left" >> ticked { implicit ticker =>
+        "use successfully, test left" >> ticked { implicit ticker =>
           var got: ExitCase = null
           val r = Resource.onFinalizeCase(ec => IO { got = ec })
           r.combineK(Resource.unit).use(_ => IO.unit) must completeAs(())
@@ -848,7 +848,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
         val outerInit = Resource.make(IO.unit)(_ => IO { outerClosed = true })
 
         val async = Async[Resource[IO, *]].async[Unit] { cb =>
-          (inner *> Resource.eval(IO(cb(Right(()))))).as(None)
+          (inner *> Resource.eval(IO(cb(Right(()))))).map(_ => None)
         }
 
         (outerInit *> async *> waitR).use_.unsafeToFuture()
@@ -933,11 +933,11 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
           val winner = Resource
             .make(IO.unit)(_ => IO { winnerClosed = true })
             .evalMap(_ => IO.sleep(100.millis))
-            .as("winner")
+            .map(_ => "winner")
           val loser = Resource
             .make(IO.unit)(_ => IO { loserClosed = true })
             .evalMap(_ => IO.sleep(200.millis))
-            .as("loser")
+            .map(_ => "loser")
 
           val target =
             winner.race(loser).evalMap(e => IO { results = e }) *> waitR *> Resource.eval(IO {
@@ -986,7 +986,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
             case Left(()) =>
               acquiredRight.get.ifM(loserReleased.get.map(_ must beRight[Unit]), IO.pure(ok))
             case Right(()) =>
-              acquiredLeft.get.ifM(loserReleased.get.map(_ must beLeft[Unit]).void, IO.pure(ok))
+              acquiredLeft.get.ifM(loserReleased.get.map(_ must beLeft[Unit]), IO.pure(ok))
           }
         }
 
@@ -1169,6 +1169,31 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
           } *> acquiredMustBe(1) *> releasedMustBe(1)
         }.void must completeAs(())
       }
+    }
+  }
+
+  "attempt" >> {
+
+    "releases resource on error" in ticked { implicit ticker =>
+      IO.ref(0)
+        .flatMap { ref =>
+          val resource = Resource.make(ref.update(_ + 1))(_ => ref.update(_ + 1))
+          val error = Resource.raiseError[IO, Unit, Throwable](new Exception)
+          (resource *> error).attempt.use { r =>
+            IO(r must beLeft) *> ref.get.map { _ must be_==(2) }
+          }
+        }
+        .void must completeAs(())
+    }
+
+    "acquire is interruptible" in ticked { implicit ticker =>
+      val sleep = IO.never
+      val timeout = 500.millis
+      IO.ref(false).flatMap { ref =>
+        val r = Resource.makeFull[IO, Unit] { poll => poll(sleep).onCancel(ref.set(true)) }(_ =>
+          IO.unit)
+        r.attempt.timeout(timeout).attempt.use_ *> ref.get
+      } must completeAs(true)
     }
   }
 

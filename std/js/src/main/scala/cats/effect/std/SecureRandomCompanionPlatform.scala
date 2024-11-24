@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,10 @@
  */
 
 package cats.effect.std
+
+import cats.Applicative
+import cats.effect.kernel.Sync
+import cats.effect.std.Random.ScalaRandom
 
 import scala.scalajs.js
 import scala.scalajs.js.typedarray._
@@ -109,5 +113,11 @@ private[std] trait SecureRandomCompanionPlatform {
       )
     }
   }
+
+  def javaSecuritySecureRandom[F[_]: Sync]: F[SecureRandom[F]] =
+    Sync[F].delay(unsafeJavaSecuritySecureRandom())
+
+  private[effect] def unsafeJavaSecuritySecureRandom[F[_]: Sync](): SecureRandom[F] =
+    new ScalaRandom[F](Applicative[F].pure(new JavaSecureRandom())) with SecureRandom[F] {}
 
 }

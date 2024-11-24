@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2023 Typelevel
+ * Copyright 2020-2024 Typelevel
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cats
 package effect
 package std
 
-import cats.Applicative
 import cats.effect.kernel._
 import cats.effect.kernel.syntax.all._
 import cats.syntax.all._
@@ -231,17 +230,14 @@ object Semaphore {
 
           if (n == 0) F.unit
           else
-            state
-              .modify {
-                case State(permits, waiting) =>
-                  if (waiting.isEmpty) State(permits + n, waiting) -> F.unit
-                  else {
-                    val (newN, waitingNow, wakeup) = fulfil(n, waiting, Q())
-                    State(newN, waitingNow) -> wakeup.traverse_(_.complete)
-                  }
-              }
-              .flatten
-              .uncancelable
+            state.flatModify {
+              case State(permits, waiting) =>
+                if (waiting.isEmpty) State(permits + n, waiting) -> F.unit
+                else {
+                  val (newN, waitingNow, wakeup) = fulfil(n, waiting, Q())
+                  State(newN, waitingNow) -> wakeup.traverse_(_.complete)
+                }
+            }
         }
 
         def available: F[Long] = state.get.map(_.permits)

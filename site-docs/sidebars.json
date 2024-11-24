@@ -4,6 +4,7 @@
       "getting-started",
       "concepts",
       "tutorial",
+      "recipes",
       "faq",
       "migration-guide",
       "third-party-resources"
@@ -43,6 +44,7 @@
       "std/dispatcher",
       "std/env",
       "std/hotswap",
+      "std/mapref",
       "std/mutex",
       "std/pqueue",
       "std/queue",
