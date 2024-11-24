@@ -907,7 +907,7 @@ lazy val tests: CrossProject = crossProject(JSPlatform, JVMPlatform, NativePlatf
       "org.specs2" %%% "specs2-scalacheck" % Specs2Version % Test,
       "org.typelevel" %%% "discipline-specs2" % DisciplineVersion % Test,
       "org.typelevel" %%% "cats-kernel-laws" % CatsVersion % Test,
-      "org.typelevel" %% "cats-mtl-laws" % CatsMtlVersion % Test
+      "org.typelevel" %%% "cats-mtl-laws" % CatsMtlVersion % Test
     ),
     githubWorkflowArtifactUpload := false
   )
