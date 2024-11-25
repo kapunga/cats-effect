@@ -16,7 +16,9 @@
 
 package cats.effect
 
+import cats.Applicative
 import cats.data.AndThen
+import cats.mtl.Local
 
 /**
  * [[IOLocal]] provides a handy way of manipulating a context on different scopes.
@@ -238,6 +240,17 @@ sealed trait IOLocal[A] extends IOLocalPlatform[A] { self =>
    */
   def lens[B](get: A => B)(set: A => B => A): IOLocal[B]
 
+  final def asLocal: Local[IO, A] =
+    new Local[IO, A] {
+      def applicative: Applicative[IO] =
+        IO.asyncForIO
+
+      def ask[A2 >: A] =
+        self.get
+
+      def local[B](iob: IO[B])(f: A => A): IO[B] =
+        self.modify(e => f(e) -> e).bracket(Function.const(iob))(self.set)
+    }
 }
 
 object IOLocal {
@@ -312,5 +325,4 @@ object IOLocal {
       new IOLocalLens(underlying, getter, setter)
     }
   }
-
 }

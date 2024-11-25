@@ -1949,6 +1949,9 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
       case Failure(err) => raiseError(err)
     }
 
+  def local[E](e: E): IO[cats.mtl.Local[IO, E]] =
+    IOLocal(e).map(_.asLocal)
+
   // instances
 
   implicit def showForIO[A: Show]: Show[IO[A]] =

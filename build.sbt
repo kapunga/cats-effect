@@ -301,6 +301,7 @@ ThisBuild / apiURL := Some(url("https://typelevel.org/cats-effect/api/3.x/"))
 ThisBuild / autoAPIMappings := true
 
 val CatsVersion = "2.11.0"
+val CatsMtlVersion = "1.3.0"
 val Specs2Version = "4.20.5"
 val ScalaCheckVersion = "1.17.1"
 val DisciplineVersion = "1.4.0"
@@ -463,6 +464,9 @@ lazy val core = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .dependsOn(kernel, std)
   .settings(
     name := "cats-effect",
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-mtl" % CatsMtlVersion
+    ),
     mimaBinaryIssueFilters ++= Seq(
       // introduced by #1837, removal of package private class
       ProblemFilters.exclude[MissingClassProblem]("cats.effect.AsyncPropagateCancelation"),
@@ -902,7 +906,8 @@ lazy val tests: CrossProject = crossProject(JSPlatform, JVMPlatform, NativePlatf
       "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion,
       "org.specs2" %%% "specs2-scalacheck" % Specs2Version % Test,
       "org.typelevel" %%% "discipline-specs2" % DisciplineVersion % Test,
-      "org.typelevel" %%% "cats-kernel-laws" % CatsVersion % Test
+      "org.typelevel" %%% "cats-kernel-laws" % CatsVersion % Test,
+      "org.typelevel" %%% "cats-mtl-laws" % CatsMtlVersion % Test
     ),
     githubWorkflowArtifactUpload := false
   )
