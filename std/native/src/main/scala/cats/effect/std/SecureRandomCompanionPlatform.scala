@@ -16,6 +16,10 @@
 
 package cats.effect.std
 
+import cats.Applicative
+import cats.effect.kernel.Sync
+import cats.effect.std.Random.ScalaRandom
+
 import org.typelevel.scalaccompat.annotation._
 
 import scala.scalanative.libc.errno._
@@ -34,7 +38,7 @@ private[std] trait SecureRandomCompanionPlatform {
       var i = 0
       while (i < len) {
         val n = Math.min(256, len - i)
-        if (sysrandom.getentropy(bytes.at(i), n.toULong) < 0)
+        if (sysrandom.getentropy(bytes.atUnsafe(i), n.toULong) < 0)
           throw new RuntimeException(fromCString(strerror(errno)))
         i += n
       }
@@ -52,6 +56,12 @@ private[std] trait SecureRandomCompanionPlatform {
     }
 
   }
+
+  def javaSecuritySecureRandom[F[_]: Sync]: F[SecureRandom[F]] =
+    Sync[F].delay(unsafeJavaSecuritySecureRandom())
+
+  private[effect] def unsafeJavaSecuritySecureRandom[F[_]: Sync](): SecureRandom[F] =
+    new ScalaRandom[F](Applicative[F].pure(new JavaSecureRandom())) with SecureRandom[F] {}
 
 }
 

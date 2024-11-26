@@ -16,6 +16,8 @@
 
 package cats.effect
 
+import org.typelevel.scalaccompat.annotation._
+
 // defined in Java for the JVM, Scala for ScalaJS (where object field access is faster)
 private object IOFiberConstants {
 
@@ -43,4 +45,9 @@ private object IOFiberConstants {
   final val CedeR = 6
   final val AutoCedeR = 7
   final val DoneR = 8
+
+  final val ioLocalPropagation = false
+
+  @nowarn212
+  @inline def isVirtualThread(t: Thread): Boolean = false
 }

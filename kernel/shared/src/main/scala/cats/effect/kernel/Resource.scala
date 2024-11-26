@@ -700,28 +700,51 @@ sealed abstract class Resource[F[_], +A] extends Serializable {
       }
     }
 
-  def attempt[E](implicit F: ApplicativeError[F, E]): Resource[F, Either[E, A]] =
-    this match {
-      case Allocate(resource) =>
-        Resource.applyFull { poll =>
-          resource(poll).attempt.map {
-            case Left(error) => (Left(error), (_: ExitCase) => F.unit)
-            case Right((a, release)) => (Right(a), release)
-          }
+  @deprecated("Use overload with MonadCancelThrow", "3.6.0")
+  def attempt[E](F: ApplicativeError[F, E]): Resource[F, Either[E, A]] =
+    F match {
+      case x: Sync[F] =>
+        attempt(x).asInstanceOf[Resource[F, Either[E, A]]]
+      case _ =>
+        implicit val x: ApplicativeError[F, E] = F
+        this match {
+          case Allocate(resource) =>
+            Resource.applyFull { poll =>
+              resource(poll).attempt.map {
+                case Left(error) => (Left(error), (_: ExitCase) => F.unit)
+                case Right((a, release)) => (Right(a), release)
+              }
+            }
+          case Bind(source, f) =>
+            Resource.unit.flatMap(_ => source.attempt(F)).flatMap {
+              case Left(error) => Resource.pure(error.asLeft)
+              case Right(s) => f(s).attempt(F)
+            }
+          case p @ Pure(_) =>
+            Resource.pure(p.a.asRight)
+          case e @ Eval(_) =>
+            Resource.eval(e.fa.attempt)
         }
-      case Bind(source, f) =>
-        Resource.unit.flatMap(_ => source.attempt).flatMap {
-          case Left(error) => Resource.pure(error.asLeft)
-          case Right(s) => f(s).attempt
-        }
-      case p @ Pure(_) =>
-        Resource.pure(p.a.asRight)
-      case e @ Eval(_) =>
-        Resource.eval(e.fa.attempt)
     }
 
+  def attempt(implicit F: MonadCancelThrow[F]): Resource[F, Either[Throwable, A]] =
+    Resource.applyFull[F, Either[Throwable, A]] { poll =>
+      poll(allocatedCase).attempt.map {
+        case Right((a, r)) => (a.asRight[Throwable], r)
+        case error => (error.asInstanceOf[Either[Throwable, A]], _ => F.unit)
+      }
+    }
+
+  @deprecated("Use overload with MonadCancelThrow", "3.6.0")
   def handleErrorWith[B >: A, E](f: E => Resource[F, B])(
-      implicit F: ApplicativeError[F, E]): Resource[F, B] =
+      F: ApplicativeError[F, E]): Resource[F, B] =
+    attempt(F).flatMap {
+      case Right(a) => Resource.pure(a)
+      case Left(e) => f(e)
+    }
+
+  def handleErrorWith[B >: A](f: Throwable => Resource[F, B])(
+      implicit F: MonadCancelThrow[F]): Resource[F, B] =
     attempt.flatMap {
       case Right(a) => Resource.pure(a)
       case Left(e) => f(e)
@@ -1223,7 +1246,6 @@ private[effect] trait ResourceHOInstances0 extends ResourceHOInstances1 {
   implicit def catsEffectAsyncForResource[F[_]](implicit F0: Async[F]): Async[Resource[F, *]] =
     new ResourceAsync[F] {
       def F = F0
-      override def applicative = this
     }
 
   implicit def catsEffectSemigroupKForResource[F[_], A](
@@ -1242,7 +1264,6 @@ private[effect] trait ResourceHOInstances1 extends ResourceHOInstances2 {
       implicit F0: Temporal[F]): Temporal[Resource[F, *]] =
     new ResourceTemporal[F] {
       def F = F0
-      override def applicative = this
     }
 
   implicit def catsEffectSyncForResource[F[_]](implicit F0: Sync[F]): Sync[Resource[F, *]] =
@@ -1257,7 +1278,6 @@ private[effect] trait ResourceHOInstances2 extends ResourceHOInstances3 {
       implicit F0: Concurrent[F]): Concurrent[Resource[F, *]] =
     new ResourceConcurrent[F] {
       def F = F0
-      override def applicative = this
     }
 
   implicit def catsEffectClockForResource[F[_]](
@@ -1282,8 +1302,9 @@ private[effect] trait ResourceHOInstances3 extends ResourceHOInstances4 {
 }
 
 private[effect] trait ResourceHOInstances4 extends ResourceHOInstances5 {
-  implicit def catsEffectMonadErrorForResource[F[_], E](
-      implicit F0: MonadError[F, E]): MonadError[Resource[F, *], E] =
+  @deprecated("Use catsEffectMonadCancelForResource", "3.6.0")
+  def catsEffectMonadErrorForResource[F[_], E](
+      F0: MonadError[F, E]): MonadError[Resource[F, *], E] =
     new ResourceMonadError[F, E] {
       def F = F0
     }
@@ -1333,9 +1354,18 @@ abstract private[effect] class ResourceFOInstances1 {
 }
 
 abstract private[effect] class ResourceMonadCancel[F[_]]
-    extends ResourceMonadError[F, Throwable]
+    extends ResourceMonad[F]
     with MonadCancel[Resource[F, *], Throwable] {
   implicit protected def F: MonadCancel[F, Throwable]
+
+  override def attempt[A](fa: Resource[F, A]): Resource[F, Either[Throwable, A]] =
+    fa.attempt
+
+  def handleErrorWith[A](fa: Resource[F, A])(f: Throwable => Resource[F, A]): Resource[F, A] =
+    fa.handleErrorWith(f)
+
+  def raiseError[A](e: Throwable): Resource[F, A] =
+    Resource.raiseError[F, A, Throwable](e)
 
   def canceled: Resource[F, Unit] = Resource.canceled
 
@@ -1430,8 +1460,6 @@ abstract private[effect] class ResourceAsync[F[_]]
     with Async[Resource[F, *]] { self =>
   implicit protected def F: Async[F]
 
-  override def applicative = this
-
   override def unique: Resource[F, Unique.Token] =
     Resource.unique
 
@@ -1460,6 +1488,7 @@ abstract private[effect] class ResourceAsync[F[_]]
     Resource.executionContext
 }
 
+@deprecated("Use ResourceMonadCancel", "3.6.0")
 abstract private[effect] class ResourceMonadError[F[_], E]
     extends ResourceMonad[F]
     with MonadError[Resource[F, *], E] {
@@ -1467,10 +1496,10 @@ abstract private[effect] class ResourceMonadError[F[_], E]
   implicit protected def F: MonadError[F, E]
 
   override def attempt[A](fa: Resource[F, A]): Resource[F, Either[E, A]] =
-    fa.attempt
+    fa.attempt(F)
 
   def handleErrorWith[A](fa: Resource[F, A])(f: E => Resource[F, A]): Resource[F, A] =
-    fa.handleErrorWith(f)
+    fa.handleErrorWith(f)(F)
 
   def raiseError[A](e: E): Resource[F, A] =
     Resource.raiseError[F, A, E](e)

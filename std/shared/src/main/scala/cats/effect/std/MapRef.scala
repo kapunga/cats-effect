@@ -17,7 +17,6 @@
 package cats.effect.std
 
 import cats._
-import cats.conversions.all._
 import cats.data._
 import cats.effect.kernel._
 import cats.syntax.all._
@@ -44,6 +43,20 @@ trait MapRef[F[_], K, V] extends Function1[K, Ref[F, V]] {
 }
 
 object MapRef extends MapRefCompanionPlatform {
+
+  /**
+   * Default constructor for [[MapRef]]. If [[Sync]] is available, it will delegate to
+   * [[ofConcurrentHashMap]], otherwise it will fallback to [[ofShardedImmutableMap]].
+   */
+  def apply[F[_]: Concurrent, K, V]: F[MapRef[F, K, Option[V]]] = {
+    Concurrent[F] match {
+      case s: Sync[F] =>
+        ofConcurrentHashMap()(s)
+      case _ =>
+        ofShardedImmutableMap[F, K, V](shardCount = Runtime.getRuntime.availableProcessors())
+    }
+
+  }
 
   /**
    * Creates a sharded map ref to reduce atomic contention on the Map, given an efficient and
@@ -193,7 +206,7 @@ object MapRef extends MapRefCompanionPlatform {
 
       def tryModify[B](f: Option[V] => (Option[V], B)): F[Option[B]] =
         // we need the suspend because we do effects inside
-        delay {
+        delay[F[Option[B]]] {
           val init = chm.get(k)
           if (init == null) {
             f(None) match {
@@ -512,5 +525,8 @@ object MapRef extends MapRefCompanionPlatform {
           val (set, out) = f(v)
           (set.some, out.some)
       }
+
+    def withDefaultValue(default: V)(implicit E: Eq[V], F: Functor[F]): MapRef[F, K, V] =
+      defaultedMapRef(mRef, default)
   }
 }
