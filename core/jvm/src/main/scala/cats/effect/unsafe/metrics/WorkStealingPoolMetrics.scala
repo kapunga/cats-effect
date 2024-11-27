@@ -39,6 +39,11 @@ sealed trait WorkStealingPoolMetrics {
    * The list of queue-specific metrics of the work-stealing thread pool.
    */
   def localQueues: List[WorkStealingPoolMetrics.LocalQueueMetrics]
+
+  /**
+   * The list of timer-specific metrics of the work-stealing thread pool.
+   */
+  def timers: List[WorkStealingPoolMetrics.TimerHeapMetrics]
 }
 
 object WorkStealingPoolMetrics {
@@ -201,6 +206,25 @@ object WorkStealingPoolMetrics {
     def tailTag(): Int
   }
 
+  sealed trait TimerHeapMetrics {
+
+    /**
+     * The index of the TimerHeap.
+     */
+    def index: Int
+
+    /**
+     * The current number of the outstanding timers.
+     */
+    def outstandingTimers(): Int
+
+    /**
+     * Returns the next due to fire.
+     */
+    def nextTimerDue(): Option[Long]
+
+  }
+
   private[metrics] def apply(ec: ExecutionContext): Option[WorkStealingPoolMetrics] =
     ec match {
       case wstp: WorkStealingThreadPool[_] =>
@@ -214,6 +238,11 @@ object WorkStealingPoolMetrics {
           val localQueues: List[LocalQueueMetrics] =
             wstp.localQueues.toList.zipWithIndex.map {
               case (queue, idx) => localQueueMetrics(queue, idx)
+            }
+
+          val timers: List[TimerHeapMetrics] =
+            wstp.sleepers.toList.zipWithIndex.map {
+              case (timerHeap, idx) => timerHeapMetrics(timerHeap, idx)
             }
         }
 
@@ -246,5 +275,12 @@ object WorkStealingPoolMetrics {
       def realHeadTag(): Int = queue.getRealHeadTag()
       def stealHeadTag(): Int = queue.getStealHeadTag()
       def tailTag(): Int = queue.getTailTag()
+    }
+
+  private def timerHeapMetrics(timerHeap: TimerHeap, idx: Int): TimerHeapMetrics =
+    new TimerHeapMetrics {
+      def index: Int = idx
+      def outstandingTimers(): Int = timerHeap.outstandingTimers()
+      def nextTimerDue(): Option[Long] = timerHeap.nextTimerDue()
     }
 }

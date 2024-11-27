@@ -241,6 +241,20 @@ private final class TimerHeap extends AtomicInteger {
     }
   }
 
+  /**
+   * Returns the current number of the outstanding timers.
+   */
+  def outstandingTimers(): Int = size
+
+  /**
+   * Returns the next due to fire.
+   */
+  def nextTimerDue(): Option[Long] =
+    heap
+      .lift(1)
+      .filter(t => !t.isDeleted() && t.triggerTime != Long.MinValue)
+      .map(_.triggerTime)
+
   private[this] def pack(removeCount: Int): Unit = {
     val heap = this.heap // local copy
 
