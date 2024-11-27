@@ -42,7 +42,7 @@ import java.time.Instant
 import java.time.temporal.ChronoField
 import java.util.Comparator
 import java.util.concurrent.{ConcurrentSkipListSet, ThreadLocalRandom}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 
 import WorkStealingThreadPool._
 
@@ -76,6 +76,10 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
 
   import TracingConstants._
   import WorkStealingThreadPoolConstants._
+
+  // a unique identifier of the thread pool within a JVM
+  // used in the MBean name and as an identifier in metrics
+  private[unsafe] val id = WorkStealingThreadPool.IdCounter.getAndIncrement()
 
   /**
    * References to worker threads and their local queues.
@@ -839,6 +843,8 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
 }
 
 private object WorkStealingThreadPool {
+
+  private val IdCounter: AtomicLong = new AtomicLong(0)
 
   /**
    * A wrapper for a cancelation callback that is created asynchronously.

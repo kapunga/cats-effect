@@ -104,11 +104,11 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
         if (mBeanServer ne null) {
           val registeredMBeans = mutable.Set.empty[ObjectName]
 
-          val hash = System.identityHashCode(threadPool).toHexString
+          val threadPoolId = threadPool.id
 
           try {
             val computePoolSamplerName = new ObjectName(
-              s"cats.effect.unsafe.metrics:type=ComputePoolSampler-$hash")
+              s"cats.effect.unsafe.metrics:type=ComputePoolSampler-$threadPoolId")
             val computePoolSampler = new ComputePoolSampler(threadPool)
             mBeanServer.registerMBean(computePoolSampler, computePoolSamplerName)
             registeredMBeans += computePoolSamplerName
@@ -125,7 +125,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
 
             try {
               val localQueueSamplerName = new ObjectName(
-                s"cats.effect.unsafe.metrics:type=LocalQueueSampler-$hash-$i")
+                s"cats.effect.unsafe.metrics:type=LocalQueueSampler-$threadPoolId-$i")
               val localQueueSampler = new LocalQueueSampler(localQueue)
               mBeanServer.registerMBean(localQueueSampler, localQueueSamplerName)
               registeredMBeans += localQueueSamplerName
@@ -264,11 +264,10 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
         }
 
       if (mBeanServer ne null) {
-        val hash = System.identityHashCode(fiberMonitor).toHexString
-
         try {
+          val mbeanId = LiveFiberSnapshotTrigger.IdCounter.getAndIncrement()
           val liveFiberSnapshotTriggerName = new ObjectName(
-            s"cats.effect.unsafe.metrics:type=LiveFiberSnapshotTrigger-$hash")
+            s"cats.effect.unsafe.metrics:type=LiveFiberSnapshotTrigger-$mbeanId")
           val liveFiberSnapshotTrigger = new LiveFiberSnapshotTrigger(fiberMonitor)
           mBeanServer.registerMBean(liveFiberSnapshotTrigger, liveFiberSnapshotTriggerName)
 
