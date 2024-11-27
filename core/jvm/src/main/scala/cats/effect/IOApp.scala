@@ -353,7 +353,7 @@ trait IOApp {
              |To ensure proper cleanup, either
              |  - set `Compile / run / fork := true` in this project
              |  - use `fgRun` instead of `run`
-             |  - use 'bgStop` to terminiate `run`
+             |  - use 'bgStop` to terminate `run`
              |  - update sbt to a version after 1.10.5
              |
              |To silence this warning set the system property:
