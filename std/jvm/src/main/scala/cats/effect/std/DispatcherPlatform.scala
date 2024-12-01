@@ -44,22 +44,23 @@ private[std] trait DispatcherPlatform[F[_]] { this: Dispatcher[F] =>
   }
 
   /**
-   * Submits an effect to be executed and indefinitely blocks until a result is produced. This
-   * function will throw an exception if the submitted effect terminates with an error.
+   * Submits an effect to be executed and indefinitely blocks until a result is produced.
+   * Cancels the effect in case of Java thread interruption. This function will throw an
+   * exception if the submitted effect terminates with an error.
    */
   def unsafeRunSync[A](fa: F[A]): A =
     unsafeRunTimed(fa, Duration.Inf)
 
   /**
    * Submits an effect to be executed and blocks for at most the specified timeout for a result
-   * to be produced. This function will throw an exception if the submitted effect terminates
-   * with an error.
+   * to be produced. Cancels the effect both in case of timeout or Java thread interruption.
+   * This function will throw an exception if the submitted effect terminates with an error.
    */
   def unsafeRunTimed[A](fa: F[A], timeout: Duration): A = {
     val (fut, cancel) = unsafeToFutureCancelable(fa)
     try Await.result(fut, timeout)
     catch {
-      case t: TimeoutException =>
+      case t @ (_: TimeoutException | _: InterruptedException) =>
         cancel()
         throw t
     }

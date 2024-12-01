@@ -20,6 +20,8 @@ package std
 import cats.effect.kernel.Deferred
 import cats.syntax.all._
 
+import scala.concurrent.duration.DurationInt
+
 class DispatcherJVMSpec extends BaseSpec {
 
   "async dispatcher" should {
@@ -41,6 +43,24 @@ class DispatcherJVMSpec extends BaseSpec {
           rec.use(_ => IO.unit)
         }
       } yield ok
+    }
+
+    "Propagate Java thread interruption in unsafeRunSync" in real {
+      Dispatcher.parallel[IO](await = true).use { dispatcher =>
+        for {
+          canceled <- Deferred[IO, Unit]
+          io = IO.sleep(1.second).onCancel(canceled.complete(()).void)
+          f <- IO.interruptible {
+            try dispatcher.unsafeRunSync(io)
+            catch { case _: InterruptedException => }
+          }.start
+          _ <- IO.sleep(100.millis)
+          _ <- f.cancel
+          _ <- canceled
+            .get
+            .timeoutTo(300.millis, IO.raiseError(new Exception("io was not canceled")))
+        } yield ok
+      }
     }
   }
 }

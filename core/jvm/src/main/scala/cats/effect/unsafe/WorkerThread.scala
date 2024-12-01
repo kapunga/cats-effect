@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * system when compared to a fixed size thread pool whose worker threads all draw tasks from a
  * single global work queue.
  */
-private final class WorkerThread[P](
+private[effect] final class WorkerThread[P <: AnyRef](
     idx: Int,
     // Local queue instance with exclusive write access.
     private[this] var queue: LocalQueue,
@@ -106,6 +106,8 @@ private final class WorkerThread[P](
 
   private val indexTransfer: LinkedTransferQueue[Integer] = new LinkedTransferQueue()
   private[this] val runtimeBlockingExpiration: Duration = pool.runtimeBlockingExpiration
+
+  private[effect] var currentIOFiber: IOFiber[_] = _
 
   private[this] val RightUnit = Right(())
   private[this] val noop = new Function0[Unit] with Runnable {
@@ -290,6 +292,9 @@ private final class WorkerThread[P](
     fiberBag.forEach(r => foreign ++= captureTrace(r))
     foreign.toMap
   }
+
+  private[unsafe] def ownsPoller(poller: P): Boolean =
+    poller eq _poller
 
   private[unsafe] def ownsTimers(timers: TimerHeap): Boolean =
     sleepers eq timers

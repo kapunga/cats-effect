@@ -350,7 +350,11 @@ trait IOApp {
           """|[WARNING] IOApp `main` is running on a thread other than the main thread.
              |This may prevent correct resource cleanup after `main` completes.
              |This condition could be caused by executing `run` in an interactive sbt session with `fork := false`.
-             |Set `Compile / run / fork := true` in this project to resolve this.
+             |To ensure proper cleanup, either
+             |  - set `Compile / run / fork := true` in this project
+             |  - use `fgRun` instead of `run`
+             |  - use 'bgStop` to terminate `run`
+             |  - update sbt to a version after 1.10.5
              |
              |To silence this warning set the system property:
              |`-Dcats.effect.warnOnNonMainThreadDetected=false`.
@@ -393,7 +397,11 @@ trait IOApp {
           )
 
         val (blocking, blockDown) =
-          IORuntime.createDefaultBlockingExecutionContext()
+          IORuntime.createDefaultBlockingExecutionContext(
+            threadPrefix = "io-blocking",
+            reportFailure =
+              (t: Throwable) => reportFailure(t).unsafeRunAndForgetWithoutCallback()(runtime)
+          )
 
         IORuntime(
           compute,
@@ -447,10 +455,10 @@ trait IOApp {
     val queue = this.queue
 
     val fiber =
-      JvmCpuStarvationMetrics()
-        .flatMap { cpuStarvationMetrics =>
+      JvmCpuStarvationMetrics(runtime.metrics.cpuStarvationSampler)
+        .flatMap { _ =>
           CpuStarvationCheck
-            .run(runtimeConfig, cpuStarvationMetrics, onCpuStarvationWarn)
+            .run(runtimeConfig, runtime.metrics.cpuStarvationSampler, onCpuStarvationWarn)
             .background
         }
         .surround(ioa)

@@ -40,7 +40,15 @@ import cats.data.Ior
 import cats.effect.instances.spawn
 import cats.effect.kernel.CancelScope
 import cats.effect.kernel.GenTemporal.handleDuration
-import cats.effect.std.{Backpressure, Console, Env, Supervisor, UUIDGen}
+import cats.effect.std.{
+  Backpressure,
+  Console,
+  Env,
+  SecureRandom,
+  Supervisor,
+  SystemProperties,
+  UUIDGen
+}
 import cats.effect.tracing.{Tracing, TracingEvent}
 import cats.effect.unsafe.IORuntime
 import cats.syntax._
@@ -489,11 +497,8 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
   def guarantee(finalizer: IO[Unit]): IO[A] =
     // this is a little faster than the default implementation, which helps Resource
     IO uncancelable { poll =>
-      val handled = finalizer handleErrorWith { t =>
-        IO.executionContext.flatMap(ec => IO(ec.reportFailure(t)))
-      }
-
-      poll(this).onCancel(finalizer).onError(_ => handled).flatTap(_ => finalizer)
+      val onError: PartialFunction[Throwable, IO[Unit]] = { case _ => finalizer.reportError }
+      poll(this).onCancel(finalizer).onError(onError).flatTap(_ => finalizer)
     }
 
   /**
@@ -519,12 +524,10 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
   def guaranteeCase(finalizer: OutcomeIO[A @uncheckedVariance] => IO[Unit]): IO[A] =
     IO.uncancelable { poll =>
       val finalized = poll(this).onCancel(finalizer(Outcome.canceled))
-      val handled = finalized.onError { e =>
-        finalizer(Outcome.errored(e)).handleErrorWith { t =>
-          IO.executionContext.flatMap(ec => IO(ec.reportFailure(t)))
-        }
+      val onError: PartialFunction[Throwable, IO[Unit]] = {
+        case e => finalizer(Outcome.errored(e)).reportError
       }
-      handled.flatTap(a => finalizer(Outcome.succeeded(IO.pure(a))))
+      finalized.onError(onError).flatTap { (a: A) => finalizer(Outcome.succeeded(IO.pure(a))) }
     }
 
   def handleError[B >: A](f: Throwable => B): IO[B] =
@@ -588,8 +591,20 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
   def onCancel(fin: IO[Unit]): IO[A] =
     IO.OnCancel(this, fin)
 
-  def onError(f: Throwable => IO[Unit]): IO[A] =
-    handleErrorWith(t => f(t).voidError *> IO.raiseError(t))
+  @deprecated("Use onError with PartialFunction argument", "3.6.0")
+  def onError(f: Throwable => IO[Unit]): IO[A] = {
+    val pf: PartialFunction[Throwable, IO[Unit]] = { case t => f(t).reportError }
+    onError(pf)
+  }
+
+  /**
+   * Execute a callback on certain errors, then rethrow them. Any non matching error is rethrown
+   * as well.
+   *
+   * Implements `ApplicativeError.onError`.
+   */
+  def onError(pf: PartialFunction[Throwable, IO[Unit]]): IO[A] =
+    handleErrorWith(t => pf.applyOrElse(t, (_: Throwable) => IO.unit) *> IO.raiseError(t))
 
   /**
    * Like `Parallel.parProductL`
@@ -779,17 +794,27 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
     andWait(duration: Duration)
 
   /**
-   * Returns an IO that either completes with the result of the source within the specified time
-   * `duration` or otherwise raises a `TimeoutException`.
+   * Returns an IO that either completes with the result of the source or otherwise raises a
+   * `TimeoutException`.
    *
-   * The source is canceled in the event that it takes longer than the specified time duration
-   * to complete. Once the source has been successfully canceled (and has completed its
-   * finalizers), the `TimeoutException` will be raised. If the source is uncancelable, the
-   * resulting effect will wait for it to complete before raising the exception.
+   * The source is raced against the timeout `duration`, and its cancelation is triggered if the
+   * source doesn't complete within the specified time. The resulting effect will always wait
+   * for the source effect to complete (and to complete its finalizers), and will return the
+   * source's outcome over raising a `TimeoutException`.
+   *
+   * In case source and timeout complete simultaneously, the result of the source will be
+   * returned over raising a `TimeoutException`.
+   *
+   * If the source effect is uncancelable, a `TimeoutException` will never be raised.
    *
    * @param duration
-   *   is the time span for which we wait for the source to complete; in the event that the
-   *   specified time has passed without the source completing, a `TimeoutException` is raised
+   *   is the time span for which we wait for the source to complete before triggering its
+   *   cancelation; in the event that the specified time has passed without the source
+   *   completing, a `TimeoutException` is raised
+   *
+   * @see
+   *   [[timeoutAndForget]] for a variant which does not wait for cancelation of the source
+   *   effect to complete.
    */
   def timeout[A2 >: A](duration: Duration): IO[A2] =
     handleDuration(duration, this) { finiteDuration =>
@@ -802,26 +827,35 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
     timeout(duration: Duration)
 
   /**
-   * Returns an IO that either completes with the result of the source within the specified time
-   * `duration` or otherwise evaluates the `fallback`.
+   * Returns an IO that either completes with the result of the source or otherwise evaluates
+   * the `fallback`.
    *
-   * The source is canceled in the event that it takes longer than the specified time duration
-   * to complete. Once the source has been successfully canceled (and has completed its
-   * finalizers), the fallback will be sequenced. If the source is uncancelable, the resulting
-   * effect will wait for it to complete before evaluating the fallback.
+   * The source is raised against the timeout `duration`, and its cancelation is triggered if
+   * the source doesn't complete within the specified time. The resulting effect will always
+   * wait for the source effect to complete (and to complete its finalizers), and will return
+   * the source's outcome over sequencing the `fallback`.
+   *
+   * In case source and timeout complete simultaneously, the result of the source will be
+   * returned over sequencing the `fallback`.
+   *
+   * If the source in uncancelable, `fallback` will never be evaluated.
    *
    * @param duration
-   *   is the time span for which we wait for the source to complete; in the event that the
-   *   specified time has passed without the source completing, the `fallback` gets evaluated
+   *   is the time span for which we wait for the source to complete before triggering its
+   *   cancelation; in the event that the specified time has passed without the source
+   *   completing, the `fallback` gets evaluated
    *
    * @param fallback
    *   is the task evaluated after the duration has passed and the source canceled
    */
   def timeoutTo[A2 >: A](duration: Duration, fallback: IO[A2]): IO[A2] = {
     handleDuration[IO[A2]](duration, this) { finiteDuration =>
-      race(IO.sleep(finiteDuration)).flatMap {
-        case Right(_) => fallback
-        case Left(value) => IO.pure(value)
+      IO.uncancelable { poll =>
+        poll(racePair(IO.sleep(finiteDuration))) flatMap {
+          case Left((oc, f)) => f.cancel *> oc.embed(poll(IO.canceled) *> IO.never)
+          case Right((f, _)) =>
+            f.cancel *> f.join.flatMap { oc => oc.fold(fallback, IO.raiseError, identity) }
+        }
       }
     }
   }
@@ -928,6 +962,19 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
   def void: IO[Unit] =
     map(_ => ())
 
+  /**
+   * Similar to [[IO.voidError]], but also reports the error.
+   */
+  private[effect] def reportError(implicit ev: A <:< Unit): IO[Unit] = {
+    val _ = ev
+    asInstanceOf[IO[Unit]].handleErrorWith { t =>
+      IO.executionContext.flatMap(ec => IO(ec.reportFailure(t)))
+    }
+  }
+
+  /**
+   * Discard any error raised by the source.
+   */
   def voidError(implicit ev: A <:< Unit): IO[Unit] = {
     val _ = ev
     asInstanceOf[IO[Unit]].handleError(_ => ())
@@ -958,6 +1005,12 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
    */
   def unsafeRunAsync(cb: Either[Throwable, A] => Unit)(
       implicit runtime: unsafe.IORuntime): Unit = {
+    unsafeRunAsyncImpl(cb)
+    ()
+  }
+
+  private[effect] def unsafeRunAsyncImpl(cb: Either[Throwable, A] => Unit)(
+      implicit runtime: unsafe.IORuntime): IOFiber[A @uncheckedVariance] =
     unsafeRunFiber(
       cb(Left(new CancellationException("The fiber was canceled"))),
       t => {
@@ -968,8 +1021,6 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
       },
       a => cb(Right(a))
     )
-    ()
-  }
 
   def unsafeRunAsyncOutcome(cb: Outcome[Id, Throwable, A @uncheckedVariance] => Unit)(
       implicit runtime: unsafe.IORuntime): Unit = {
@@ -1072,22 +1123,18 @@ sealed abstract class IO[+A] private () extends IOPlatform[A] {
       implicit runtime: unsafe.IORuntime): IOFiber[A @uncheckedVariance] = {
 
     val fiber = new IOFiber[A](
-      Map.empty,
-      oc =>
+      if (IOFiberConstants.ioLocalPropagation) IOLocal.getThreadLocalState()
+      else IOLocalState.empty,
+      { oc =>
+        if (registerCallback) {
+          runtime.fiberErrorCbs.remove(failure)
+        }
         oc.fold(
-          {
-            runtime.fiberErrorCbs.remove(failure)
-            canceled
-          },
-          { t =>
-            runtime.fiberErrorCbs.remove(failure)
-            failure(t)
-          },
-          { ioa =>
-            runtime.fiberErrorCbs.remove(failure)
-            success(ioa.asInstanceOf[IO.Pure[A]].value)
-          }
-        ),
+          canceled,
+          failure,
+          { ioa => success(ioa.asInstanceOf[IO.Pure[A]].value) }
+        )
+      },
       this,
       runtime.compute,
       runtime
@@ -1796,7 +1843,7 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
    *   [[IO.raiseWhen]] for conditionally raising an error
    */
   def whenA(cond: Boolean)(action: => IO[Unit]): IO[Unit] =
-    Applicative[IO].whenA(cond)(action)
+    if (cond) action else IO.unit
 
   /**
    * Returns the given argument if `cond` is false, otherwise `IO.Unit`
@@ -1807,7 +1854,7 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
    *   [[IO.raiseWhen]] for conditionally raising an error
    */
   def unlessA(cond: Boolean)(action: => IO[Unit]): IO[Unit] =
-    Applicative[IO].unlessA(cond)(action)
+    whenA(!cond)(action)
 
   /**
    * Returns `raiseError` when the `cond` is true, otherwise `IO.unit`
@@ -1902,6 +1949,9 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
       case Failure(err) => raiseError(err)
     }
 
+  def local[E](e: E): IO[cats.mtl.Local[IO, E]] =
+    IOLocal(e).map(_.asLocal)
+
   // instances
 
   implicit def showForIO[A: Show]: Show[IO[A]] =
@@ -1966,6 +2016,9 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
     def pure[A](x: A): IO[A] =
       IO.pure(x)
 
+    override def unit: IO[Unit] =
+      IO.unit
+
     override def guarantee[A](fa: IO[A], fin: IO[Unit]): IO[A] =
       fa.guarantee(fin)
 
@@ -1974,6 +2027,9 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
 
     override def handleError[A](fa: IO[A])(f: Throwable => A): IO[A] =
       fa.handleError(f)
+
+    override def onError[A](fa: IO[A])(pf: PartialFunction[Throwable, IO[Unit]]): IO[A] =
+      fa.onError(pf)
 
     override def timeout[A](fa: IO[A], duration: FiniteDuration)(
         implicit ev: TimeoutException <:< Throwable): IO[A] = {
@@ -2133,10 +2189,15 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
 
   implicit val envForIO: Env[IO] = Env.make
 
+  implicit val systemPropertiesForIO: SystemProperties[IO] = SystemProperties.make
+
   // This is cached as a val to save allocations, but it uses ops from the Async
   // instance which is also cached as a val, and therefore needs to appear
   // later in the file
   private[this] val _never: IO[Nothing] = asyncForIO.never
+
+  implicit lazy val secureRandom: SecureRandom[IO] =
+    SecureRandom.unsafeJavaSecuritySecureRandom[IO]()
 
   // implementations
 

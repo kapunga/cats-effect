@@ -418,7 +418,11 @@ class UnboundedQueueSpec extends BaseSpec with QueueTests[Queue] {
 class DroppingQueueSpec extends BaseSpec with QueueTests[Queue] {
   sequential
 
-  "DroppingQueue" should {
+  "DroppingQueue (concurrent)" should {
+    droppingQueueTests(i => if (i < 1) Queue.dropping(i) else Queue.droppingForConcurrent(i))
+  }
+
+  "DroppingQueue (async)" should {
     droppingQueueTests(Queue.dropping)
   }
 
@@ -1003,6 +1007,20 @@ trait QueueTests[Q[_[_], _]] { self: BaseSpec =>
         v2 <- IO.fromFuture(IO.pure(f))
         r <- IO(v2 must beEqualTo(2))
       } yield r
+    }
+
+    "should return the queue size when take precedes offer" in ticked { implicit ticker =>
+      constructor(10).flatMap { q =>
+        take(q).background.use { took => IO.sleep(1.second) *> offer(q, 1) *> took *> size(q) }
+      } must completeAs(0)
+    }
+
+    "should return the queue size when take precedes tryOffer" in ticked { implicit ticker =>
+      constructor(10).flatMap { q =>
+        take(q).background.use { took =>
+          IO.sleep(1.second) *> tryOffer(q, 1) *> took *> size(q)
+        }
+      } must completeAs(0)
     }
   }
 }
