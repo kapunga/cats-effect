@@ -36,7 +36,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import java.util.concurrent.atomic.AtomicBoolean
-import cats.effect.unsafe.IORuntimeConfig
 
 class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
   // We need this for testing laws: prop runs can interfere with each other
@@ -1172,32 +1171,30 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
       }
     }
 
-    "does not leak if canceled right after delayed acquire is canceled" in ticked {
-      implicit ticker =>
-        (IO(new AtomicBoolean), IO.ref(false), IO.ref(false)).flatMapN {
-          (acquired, used, released) =>
-            val go = for {
-              fiber <- Resource
-                .make(IO(acquired.set(true)))(_ => released.set(true))
-                .memoizedAcquire
-                .use(_ *> used.set(true))
-                .start
-              _ <- IO.cede.untilM_(IO(acquired.get))
-              _ <- fiber.cancel
-            } yield ()
-            TestControl
-              .executeEmbed(go, IORuntimeConfig(1, 2))
-              .flatMap { _ =>
-                for {
-                  acquireRun <- IO(acquired.get)
-                  useRun <- used.get
-                  releaseRun <- released.get
-                } yield acquireRun && releaseRun
-              }
-              .replicateA(1000)
-              .map(_.forall(identity(_)))
-        } must completeAs(true)
-    }
+    // TODO enable once `PureConc` finalizer bug is fixed. Test is indefinitely waiting for finalizers as of now
+    /*
+    "does not leak if canceled right after delayed acquire is canceled" in {
+      import cats.effect.kernel.testkit.pure._
+      type F[A] = PureConc[Throwable, A]
+      val F = Concurrent[F]
+      def go = for {
+        acquired <- F.ref(false)
+        released <- F.ref(false)
+        fiber <- Resource
+          .make(acquired.set(true))(_ => released.set(true))
+          .memoizedAcquire
+          .use_
+          .start
+        _ <- F.cede.untilM_(acquired.get)
+        _ <- fiber.cancel
+        _ <- fiber.join
+        acquireRun <- acquired.get
+        releaseRun <- released.get
+      } yield acquireRun && releaseRun
+
+      run(go) == Outcome.succeeded(Some(true))
+    }.pendingUntilFixed
+    */
   }
 
   "uncancelable" >> {
