@@ -1194,7 +1194,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
 
       run(go) == Outcome.succeeded(Some(true))
     }.pendingUntilFixed
-    */
+     */
   }
 
   "attempt" >> {
