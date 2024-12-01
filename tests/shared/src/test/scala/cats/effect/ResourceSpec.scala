@@ -1171,8 +1171,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
       }
     }
 
-    // TODO enable once `PureConc` finalizer bug is fixed. Test is indefinitely waiting for finalizers as of now
-    /*
+    // TODO enable once `PureConc` finalizer bug is fixed.
     "does not leak if canceled right after delayed acquire is canceled" in {
       import cats.effect.kernel.testkit.pure._
       type F[A] = PureConc[Throwable, A]
@@ -1183,7 +1182,7 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
         fiber <- Resource
           .make(acquired.set(true))(_ => released.set(true))
           .memoizedAcquire
-          .use_
+          .use(identity)
           .start
         _ <- F.cede.untilM_(acquired.get)
         _ <- fiber.cancel
@@ -1194,7 +1193,6 @@ class ResourceSpec extends BaseSpec with ScalaCheck with Discipline {
 
       run(go) == Outcome.succeeded(Some(true))
     }.pendingUntilFixed
-     */
   }
 
   "attempt" >> {
