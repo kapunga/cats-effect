@@ -25,10 +25,10 @@ import scala.concurrent.ExecutionContext
 sealed trait WorkStealingPoolMetrics {
 
   /**
-   * The hash code of the instrumented work-stealing thread pool. This hash uniquely identifies
-   * the specific thread pool.
+   * The identifier of the instrumented work-stealing thread pool. Uniquely identifies a
+   * specific thread pool within a JVM.
    */
-  def hash: String
+  def identifier: String
 
   /**
    * Compute-specific metrics of the work-stealing thread pool.
@@ -205,8 +205,8 @@ object WorkStealingPoolMetrics {
     ec match {
       case wstp: WorkStealingThreadPool[_] =>
         val metrics = new WorkStealingPoolMetrics {
-          val hash: String =
-            System.identityHashCode(wstp).toHexString
+          val identifier: String =
+            wstp.id.toString
 
           val compute: ComputeMetrics =
             computeMetrics(wstp)
