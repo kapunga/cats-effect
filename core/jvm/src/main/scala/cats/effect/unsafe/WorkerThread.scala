@@ -115,6 +115,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
     def run() = ()
   }
 
+  // Identifies blocked worker, used for ranking cached threads
   val nameIndex: Int = pool.blockedWorkerThreadNamingIndex.getAndIncrement()
 
   // Constructor code.
@@ -124,7 +125,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
     val prefix = pool.threadPrefix
     // Set the name of this thread.
-    setName(s"$prefix-$nameIndex")
+    setName(s"$prefix-$idx")
   }
 
   private[unsafe] def poller(): P = _poller
