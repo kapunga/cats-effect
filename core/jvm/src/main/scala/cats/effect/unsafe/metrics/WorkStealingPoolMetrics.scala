@@ -214,12 +214,48 @@ object WorkStealingPoolMetrics {
     def index: Int
 
     /**
-     * The current number of the outstanding timers.
+     * The current number of the outstanding timers, that remain to be executed.
+     *
+     * @note
+     *   the value may differ between invocations
      */
-    def outstandingTimers(): Int
+    def timersOutstandingCount(): Int
 
     /**
-     * Returns the next due to fire.
+     * The total number of the successfully executed timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersExecutedCount(): Long
+
+    /**
+     * The total number of the scheduled timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersScheduledCount(): Long
+
+    /**
+     * The total number of the canceled timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersCanceledCount(): Long
+
+    /**
+     * Returns the time in nanoseconds till the next due to fire.
+     *
+     * The negative number could indicate that the worker thread is overwhelmed by
+     * (long-running) tasks and not able to check/trigger timers frequently enough. The
+     * indication is similar to the starvation checker.
+     *
+     * Returns `None` when there is no upcoming timer.
+     *
+     * @note
+     *   the value may differ between invocations
      */
     def nextTimerDue(): Option[Long]
 
@@ -280,7 +316,10 @@ object WorkStealingPoolMetrics {
   private def timerHeapMetrics(timerHeap: TimerHeap, idx: Int): TimerHeapMetrics =
     new TimerHeapMetrics {
       def index: Int = idx
-      def outstandingTimers(): Int = timerHeap.outstandingTimers()
       def nextTimerDue(): Option[Long] = timerHeap.nextTimerDue()
+      def timersOutstandingCount(): Int = timerHeap.outstandingTimers()
+      def totalTimersExecutedCount(): Long = timerHeap.totalTimersExecuted()
+      def totalTimersScheduledCount(): Long = timerHeap.totalTimersScheduled()
+      def totalTimersCanceledCount(): Long = timerHeap.totalTimersCanceled()
     }
 }
