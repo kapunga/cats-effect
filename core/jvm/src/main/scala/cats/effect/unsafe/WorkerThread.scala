@@ -383,6 +383,8 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
     // returns next state after parking
     def park(): Int = {
+      metrics.incrementParkedCount()
+
       val tt = sleepers.peekFirstTriggerTime()
       val nextState = if (tt == MIN_VALUE) { // no sleepers
         if (parkLoop()) {
@@ -974,6 +976,10 @@ private[effect] object WorkerThread {
     private[this] var idleTime: Long = 0
     def getIdleTime(): Long = idleTime
     def addIdleTime(x: Long): Unit = idleTime += x
+
+    private[this] var parkedCount: Long = 0
+    def getParkedCount(): Long = parkedCount
+    def incrementParkedCount(): Unit = parkedCount += 1
 
     private[this] var blockingCount: Long = 0
     def getBlockingCount(): Long = blockingCount
