@@ -154,51 +154,6 @@ object WorkStealingPoolMetrics {
      */
     def stolenFiberCount(): Long
 
-    /**
-     * The index that represents the head of the queue.
-     *
-     * @note
-     *   the value may differ between invocations
-     */
-    def headIndex(): Int
-
-    /**
-     * The index that represents the tail of the queue.
-     *
-     * @note
-     *   the value may differ between invocations
-     */
-    def tailIndex(): Int
-
-    /**
-     * The "real" value of the head of the local queue. This value represents the state of the
-     * head which is valid for the owner worker thread. This is an unsigned 16 bit integer.
-     *
-     * @note
-     *   the value may differ between invocations
-     */
-    def realHeadTag(): Int
-
-    /**
-     * The "steal" tag of the head of the local queue. This value represents the state of the
-     * head which is valid for any worker thread looking to steal work from this local queue.
-     * This is an unsigned 16 bit integer.
-     *
-     * @note
-     *   the value may differ between invocations
-     */
-    def stealHeadTag(): Int
-
-    /**
-     * The "tail" tag of the tail of the local queue. This value represents the state of the
-     * tail which is valid for the owner worker thread, used for enqueuing fibers into the local
-     * queue, as well as any other worker thread looking to steal work from this local queue,
-     * used for calculating how many fibers to steal. This is an unsigned 16 bit integer.
-     *
-     * @note
-     *   the value may differ between invocations
-     */
-    def tailTag(): Int
   }
 
   private[metrics] def apply(ec: ExecutionContext): Option[WorkStealingPoolMetrics] =
@@ -241,10 +196,5 @@ object WorkStealingPoolMetrics {
       def totalSpilloverCount(): Long = queue.getTotalSpilloverCount()
       def successfulStealAttemptCount(): Long = queue.getSuccessfulStealAttemptCount()
       def stolenFiberCount(): Long = queue.getStolenFiberCount()
-      def headIndex(): Int = queue.getHeadIndex()
-      def tailIndex(): Int = queue.getTailIndex()
-      def realHeadTag(): Int = queue.getRealHeadTag()
-      def stealHeadTag(): Int = queue.getStealHeadTag()
-      def tailTag(): Int = queue.getTailTag()
     }
 }
