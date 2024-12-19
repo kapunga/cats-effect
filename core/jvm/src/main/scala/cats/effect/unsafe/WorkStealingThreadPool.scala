@@ -91,6 +91,7 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
   private[unsafe] val fiberBags: Array[WeakBag[Runnable]] = new Array(threadCount)
   private[unsafe] val pollers: Array[P] =
     new Array[AnyRef](threadCount).asInstanceOf[Array[P]]
+  private[unsafe] val metrices: Array[WorkerThread.Metrics] = new Array(threadCount)
 
   def accessPoller(cb: P => Unit): Unit = {
 
@@ -160,6 +161,8 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
       fiberBags(i) = fiberBag
       val poller = system.makePoller()
       pollers(i) = poller
+      val metrics = new WorkerThread.Metrics
+      metrices(i) = metrics
 
       val thread =
         new WorkerThread(
@@ -171,6 +174,7 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
           sleepersHeap,
           system,
           poller,
+          metrics,
           this)
 
       workerThreads(i) = thread

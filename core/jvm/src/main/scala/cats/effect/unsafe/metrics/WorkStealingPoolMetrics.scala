@@ -99,6 +99,11 @@ trait WorkerThreadMetrics {
   def index: Int
 
   /**
+   * The total amount of time in nanoseconds that this WorkerThread has been parked.
+   */
+  def idleTime(): Long
+
+  /**
    * LocalQueue-specific metrics of this WorkerThread.
    */
   def localQueue: LocalQueueMetrics
@@ -236,6 +241,10 @@ object WorkStealingPoolMetrics {
       idx: Int
   ): WorkerThreadMetrics = new WorkerThreadMetrics {
     val index: Int = idx
+
+    private val metrics = wstp.metrices(idx)
+    def idleTime(): Long = metrics.getIdleTime()
+
     val localQueue: LocalQueueMetrics = localQueueMetrics(wstp.localQueues(index))
     val timerHeap: TimerHeapMetrics = timerHeapMetrics(wstp.sleepers(index))
   }

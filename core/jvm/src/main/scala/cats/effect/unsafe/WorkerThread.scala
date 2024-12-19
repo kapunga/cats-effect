@@ -30,6 +30,8 @@ import java.lang.Long.MIN_VALUE
 import java.util.concurrent.{LinkedTransferQueue, ThreadLocalRandom}
 import java.util.concurrent.atomic.AtomicBoolean
 
+import WorkerThread.Metrics
+
 /**
  * Implementation of the worker thread at the heart of the [[WorkStealingThreadPool]].
  *
@@ -55,6 +57,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
     private[this] var sleepers: TimerHeap,
     private[this] val system: PollingSystem.WithPoller[P],
     private[this] var _poller: P,
+    private[this] var metrics: Metrics,
     // Reference to the `WorkStealingThreadPool` in which this thread operates.
     pool: WorkStealingThreadPool[P])
     extends Thread
@@ -401,8 +404,6 @@ private[effect] final class WorkerThread[P <: AnyRef](
         }
       }
 
-      now = System.nanoTime()
-
       if (nextState != 4) {
         // after being unparked, we re-check sleepers;
         // if we find an already expired one, we go
@@ -423,7 +424,10 @@ private[effect] final class WorkerThread[P <: AnyRef](
     def parkLoop(): Boolean = {
       while (!done.get()) {
         // Park the thread until further notice.
+        val start = System.nanoTime()
         val polled = system.poll(_poller, -1, reportFailure)
+        now = System.nanoTime() // update now
+        metrics.addIdleTime(now - start)
 
         // the only way we can be interrupted here is if it happened *externally* (probably sbt)
         if (isInterrupted()) {
@@ -455,15 +459,17 @@ private[effect] final class WorkerThread[P <: AnyRef](
           val nanos = triggerTime - now
 
           if (nanos > 0L) {
+            val start = now
             val polled = system.poll(_poller, nanos, reportFailure)
+            // we already parked and time passed, so update time again
+            // it doesn't matter if we timed out or were awakened, the update is free-ish
+            now = System.nanoTime()
+            metrics.addIdleTime(now - start)
 
             if (isInterrupted()) {
               pool.shutdown()
               false // we know `done` is `true`
             } else {
-              // we already parked and time passed, so update time again
-              // it doesn't matter if we timed out or were awakened, the update is free-ish
-              now = System.nanoTime()
               if (parked.get()) {
                 // we were either awakened spuriously, or we timed out or polled an event
                 if (polled || (triggerTime - now <= 0)) {
@@ -506,6 +512,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
         fiberBag = null
         _active = null
         _poller = null.asInstanceOf[P]
+        metrics = null
 
         // Add this thread to the cached threads data structure, to be picked up
         // by another thread in the future.
@@ -906,6 +913,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
             sleepers,
             system,
             _poller,
+            metrics,
             pool)
         // Make sure the clone gets our old name:
         val clonePrefix = pool.threadPrefix
@@ -955,4 +963,14 @@ private[effect] final class WorkerThread[P <: AnyRef](
    */
   def getSuspendedFiberCount(): Int =
     fiberBag.size
+}
+
+private[effect] object WorkerThread {
+
+  final class Metrics {
+    private[this] var idleTime: Long = 0
+    def getIdleTime(): Long = idleTime
+    def addIdleTime(x: Long): Unit = idleTime += x
+  }
+
 }
