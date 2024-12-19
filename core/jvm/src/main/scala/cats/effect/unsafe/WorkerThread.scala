@@ -867,6 +867,8 @@ private[effect] final class WorkerThread[P <: AnyRef](
       // This `WorkerThread` has already been prepared for blocking.
       // There is no need to spawn another `WorkerThread`.
     } else {
+      metrics.incrementBlockingCount()
+
       // Spawn a new `WorkerThread` to take the place of this thread, as the
       // current thread prepares to execute a blocking action.
 
@@ -902,6 +904,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
         // a worker thread about to run blocking code is **not** parked, and
         // therefore, another worker thread would not even see it as a candidate
         // for unparking.
+        metrics.incrementRespawnCount()
         val idx = index
         val clone =
           new WorkerThread(
@@ -971,6 +974,14 @@ private[effect] object WorkerThread {
     private[this] var idleTime: Long = 0
     def getIdleTime(): Long = idleTime
     def addIdleTime(x: Long): Unit = idleTime += x
+
+    private[this] var blockingCount: Long = 0
+    def getBlockingCount(): Long = blockingCount
+    def incrementBlockingCount(): Unit = blockingCount += 1
+
+    private[this] var respawnCount: Long = 0
+    def getRespawnCount(): Long = respawnCount
+    def incrementRespawnCount(): Unit = respawnCount += 1
   }
 
 }

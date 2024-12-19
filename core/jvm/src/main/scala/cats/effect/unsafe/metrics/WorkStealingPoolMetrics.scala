@@ -104,6 +104,18 @@ trait WorkerThreadMetrics {
   def idleTime(): Long
 
   /**
+   * The total number of times that this WorkerThread has switched to a blocking thread and been
+   * replaced.
+   */
+  def blockingCount(): Long
+
+  /**
+   * The total number of times that this WorkerThread has been replaced by a newly spawned
+   * thread.
+   */
+  def respawnCount(): Long
+
+  /**
    * LocalQueue-specific metrics of this WorkerThread.
    */
   def localQueue: LocalQueueMetrics
@@ -244,6 +256,8 @@ object WorkStealingPoolMetrics {
 
     private val metrics = wstp.metrices(idx)
     def idleTime(): Long = metrics.getIdleTime()
+    def blockingCount(): Long = metrics.getBlockingCount()
+    def respawnCount(): Long = metrics.getBlockingCount()
 
     val localQueue: LocalQueueMetrics = localQueueMetrics(wstp.localQueues(index))
     val timerHeap: TimerHeapMetrics = timerHeapMetrics(wstp.sleepers(index))
