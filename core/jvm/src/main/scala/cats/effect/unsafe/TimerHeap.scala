@@ -74,6 +74,7 @@ private final class TimerHeap extends AtomicInteger {
   private[this] var totalScheduled: Long = 0L
   private[this] var totalExecuted: Long = 0L
   private[this] var totalCanceled: Long = 0L
+  private[this] var totalPacks: Long = 0L
 
   private def incrementTotalCanceled() = totalCanceled += 1
 
@@ -278,6 +279,8 @@ private final class TimerHeap extends AtomicInteger {
 
   def totalTimersCanceled(): Long = totalCanceled
 
+  def packCount(): Long = totalPacks
+
   /**
    * Returns the current number of the outstanding timers.
    */
@@ -296,6 +299,8 @@ private final class TimerHeap extends AtomicInteger {
   }
 
   private[this] def pack(removeCount: Int): Unit = {
+    totalPacks += 1
+
     val heap = this.heap // local copy
 
     // We track how many canceled nodes we removed so we can try to exit the loop early.

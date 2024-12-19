@@ -204,6 +204,11 @@ sealed trait TimerHeapMetrics {
    */
   def nextTimerDue(): Option[Long]
 
+  /**
+   * Returns the total number of times the heap packed itself to remove canceled timers.
+   */
+  def packCount(): Long
+
 }
 
 object WorkStealingPoolMetrics {
@@ -256,5 +261,6 @@ object WorkStealingPoolMetrics {
       def totalTimersExecutedCount(): Long = timerHeap.totalTimersExecuted()
       def totalTimersScheduledCount(): Long = timerHeap.totalTimersScheduled()
       def totalTimersCanceledCount(): Long = timerHeap.totalTimersCanceled()
+      def packCount(): Long = timerHeap.packCount()
     }
 }
