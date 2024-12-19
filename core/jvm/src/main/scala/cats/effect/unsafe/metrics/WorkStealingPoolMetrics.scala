@@ -91,7 +91,7 @@ sealed trait WorkStealingPoolMetrics {
   def workerThreads: List[WorkerThreadMetrics]
 }
 
-trait WorkerThreadMetrics {
+sealed trait WorkerThreadMetrics {
 
   /**
    * The index of this WorkerThread.
