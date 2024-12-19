@@ -39,6 +39,11 @@ sealed trait WorkStealingPoolMetrics {
    * The list of queue-specific metrics of the work-stealing thread pool.
    */
   def localQueues: List[WorkStealingPoolMetrics.LocalQueueMetrics]
+
+  /**
+   * The list of timer-specific metrics of the work-stealing thread pool.
+   */
+  def timers: List[WorkStealingPoolMetrics.TimerHeapMetrics]
 }
 
 object WorkStealingPoolMetrics {
@@ -156,6 +161,61 @@ object WorkStealingPoolMetrics {
 
   }
 
+  sealed trait TimerHeapMetrics {
+
+    /**
+     * The index of the TimerHeap.
+     */
+    def index: Int
+
+    /**
+     * The current number of the outstanding timers, that remain to be executed.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def timersOutstandingCount(): Int
+
+    /**
+     * The total number of the successfully executed timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersExecutedCount(): Long
+
+    /**
+     * The total number of the scheduled timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersScheduledCount(): Long
+
+    /**
+     * The total number of the canceled timers.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def totalTimersCanceledCount(): Long
+
+    /**
+     * Returns the time in nanoseconds till the next due to fire.
+     *
+     * The negative number could indicate that the worker thread is overwhelmed by
+     * (long-running) tasks and not able to check/trigger timers frequently enough. The
+     * indication is similar to the starvation checker.
+     *
+     * Returns `None` when there is no upcoming timer.
+     *
+     * @note
+     *   the value may differ between invocations
+     */
+    def nextTimerDue(): Option[Long]
+
+  }
+
   private[metrics] def apply(ec: ExecutionContext): Option[WorkStealingPoolMetrics] =
     ec match {
       case wstp: WorkStealingThreadPool[_] =>
@@ -169,6 +229,11 @@ object WorkStealingPoolMetrics {
           val localQueues: List[LocalQueueMetrics] =
             wstp.localQueues.toList.zipWithIndex.map {
               case (queue, idx) => localQueueMetrics(queue, idx)
+            }
+
+          val timers: List[TimerHeapMetrics] =
+            wstp.sleepers.toList.zipWithIndex.map {
+              case (timerHeap, idx) => timerHeapMetrics(timerHeap, idx)
             }
         }
 
@@ -196,5 +261,15 @@ object WorkStealingPoolMetrics {
       def totalSpilloverCount(): Long = queue.getTotalSpilloverCount()
       def successfulStealAttemptCount(): Long = queue.getSuccessfulStealAttemptCount()
       def stolenFiberCount(): Long = queue.getStolenFiberCount()
+    }
+
+  private def timerHeapMetrics(timerHeap: TimerHeap, idx: Int): TimerHeapMetrics =
+    new TimerHeapMetrics {
+      def index: Int = idx
+      def nextTimerDue(): Option[Long] = timerHeap.nextTimerDue()
+      def timersOutstandingCount(): Int = timerHeap.outstandingTimers()
+      def totalTimersExecutedCount(): Long = timerHeap.totalTimersExecuted()
+      def totalTimersScheduledCount(): Long = timerHeap.totalTimersScheduled()
+      def totalTimersCanceledCount(): Long = timerHeap.totalTimersCanceled()
     }
 }
