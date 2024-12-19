@@ -109,6 +109,11 @@ trait WorkerThreadMetrics {
   def parkedCount(): Long
 
   /**
+   * The total number of times that this WorkerThread has polled for I/O events.
+   */
+  def polledCount(): Long
+
+  /**
    * The total number of times that this WorkerThread has switched to a blocking thread and been
    * replaced.
    */
@@ -262,6 +267,7 @@ object WorkStealingPoolMetrics {
     private val metrics = wstp.metrices(idx)
     def idleTime(): Long = metrics.getIdleTime()
     def parkedCount(): Long = metrics.getParkedCount()
+    def polledCount(): Long = metrics.getPolledCount()
     def blockingCount(): Long = metrics.getBlockingCount()
     def respawnCount(): Long = metrics.getBlockingCount()
 

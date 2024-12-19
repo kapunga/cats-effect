@@ -427,6 +427,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
       while (!done.get()) {
         // Park the thread until further notice.
         val start = System.nanoTime()
+        metrics.incrementPolledCount()
         val polled = system.poll(_poller, -1, reportFailure)
         now = System.nanoTime() // update now
         metrics.addIdleTime(now - start)
@@ -462,6 +463,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
           if (nanos > 0L) {
             val start = now
+            metrics.incrementPolledCount()
             val polled = system.poll(_poller, nanos, reportFailure)
             // we already parked and time passed, so update time again
             // it doesn't matter if we timed out or were awakened, the update is free-ish
@@ -579,6 +581,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
           // Clean up any externally canceled timers
           sleepers.packIfNeeded()
           // give the polling system a chance to discover events
+          metrics.incrementPolledCount()
           system.poll(_poller, 0, reportFailure)
 
           // Obtain a fiber or batch of fibers from the external queue.
@@ -980,6 +983,10 @@ private[effect] object WorkerThread {
     private[this] var parkedCount: Long = 0
     def getParkedCount(): Long = parkedCount
     def incrementParkedCount(): Unit = parkedCount += 1
+
+    private[this] var polledCount: Long = 0
+    def getPolledCount(): Long = polledCount
+    def incrementPolledCount(): Unit = polledCount += 1
 
     private[this] var blockingCount: Long = 0
     def getBlockingCount(): Long = blockingCount
