@@ -91,12 +91,10 @@ object MapRef extends MapRefCompanionPlatform {
       shardCount: Int
   ): G[MapRef[F, K, Option[V]]] = {
     if (shardCount >= 1) {
-      Sync[G].defer {
-        List
-          .fill(shardCount)(())
-          .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
-          .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
-      }
+      List
+        .fill(shardCount)(())
+        .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
+        .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
     } else {
       ApplicativeError[G, Throwable].raiseError(
         new IllegalArgumentException("Shards count should be greater then zero")
