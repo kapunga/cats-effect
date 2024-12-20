@@ -68,11 +68,16 @@ object MapRef extends MapRefCompanionPlatform {
   def ofShardedImmutableMap[F[_]: Concurrent, K, V](
       shardCount: Int
   ): F[MapRef[F, K, Option[V]]] = {
-    assert(shardCount >= 1, "MapRef.sharded should have at least 1 shard")
-    List
-      .fill(shardCount)(())
-      .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
-      .map(lst => fromNonEmptySeqRefs(lst.toNeSeq.get))
+    if (shardCount >= 1) {
+      List
+        .fill(shardCount)(())
+        .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
+        .map(fromNonEmptySeqRefs[F, K, V] compose NonEmptySeq.fromSeqUnsafe)
+    } else {
+      ApplicativeError[F, Throwable].raiseError(
+        new IllegalArgumentException("Shards count should be greater then zero")
+      )
+    }
   }
 
   /**
@@ -84,12 +89,19 @@ object MapRef extends MapRefCompanionPlatform {
    */
   def inShardedImmutableMap[G[_]: Sync, F[_]: Sync, K, V](
       shardCount: Int
-  ): G[MapRef[F, K, Option[V]]] = Sync[G].defer {
-    assert(shardCount >= 1, "MapRef.sharded should have at least 1 shard")
-    List
-      .fill(shardCount)(())
-      .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
-      .map(lst => fromNonEmptySeqRefs(lst.toNeSeq.get))
+  ): G[MapRef[F, K, Option[V]]] = {
+    if (shardCount >= 1) {
+      Sync[G].defer {
+        List
+          .fill(shardCount)(())
+          .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
+          .map(fromNonEmptySeqRefs[F, K, V] compose NonEmptySeq.fromSeqUnsafe)
+      }
+    } else {
+      ApplicativeError[G, Throwable].raiseError(
+        new IllegalArgumentException("Shards count should be greater then zero")
+      )
+    }
   }
 
   /**
@@ -119,7 +131,7 @@ object MapRef extends MapRefCompanionPlatform {
       seq: NonEmptySeq[Ref[F, Map[K, V]]]
   ): MapRef[F, K, Option[V]] = {
     val array = seq.toSeq.toArray
-    val shardCount = seq.size.toInt
+    val shardCount = seq.length
     val refFunction = { (k: K) =>
       val location = Math.abs(k.## % shardCount)
       array(location)
