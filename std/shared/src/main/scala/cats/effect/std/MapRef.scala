@@ -114,7 +114,7 @@ object MapRef extends MapRefCompanionPlatform {
       seq: scala.collection.immutable.Seq[Ref[F, Map[K, V]]]
   ): MapRef[F, K, Option[V]] = {
     val array = seq.toArray
-    val shardCount = seq.size
+    val shardCount = array.length
     val refFunction = { (k: K) =>
       val location = Math.abs(k.## % shardCount)
       array(location)
@@ -131,7 +131,7 @@ object MapRef extends MapRefCompanionPlatform {
       seq: NonEmptySeq[Ref[F, Map[K, V]]]
   ): MapRef[F, K, Option[V]] = {
     val array = seq.toSeq.toArray
-    val shardCount = seq.length
+    val shardCount = array.length
     val refFunction = { (k: K) =>
       val location = Math.abs(k.## % shardCount)
       array(location)
