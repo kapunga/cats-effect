@@ -269,7 +269,7 @@ object WorkStealingPoolMetrics {
     def parkedCount(): Long = metrics.getParkedCount()
     def polledCount(): Long = metrics.getPolledCount()
     def blockingCount(): Long = metrics.getBlockingCount()
-    def respawnCount(): Long = metrics.getBlockingCount()
+    def respawnCount(): Long = metrics.getRespawnCount()
 
     val localQueue: LocalQueueMetrics = localQueueMetrics(wstp.localQueues(index))
     val timerHeap: TimerHeapMetrics = timerHeapMetrics(wstp.sleepers(index))
