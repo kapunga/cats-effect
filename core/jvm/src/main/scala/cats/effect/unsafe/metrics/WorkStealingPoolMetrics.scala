@@ -107,6 +107,11 @@ sealed trait WorkerThreadMetrics {
    * TimerHeap-specific metrics of this WorkerThread.
    */
   def timerHeap: TimerHeapMetrics
+
+  /**
+   * Poller-specific metrics of this WorkerThread.
+   */
+  def poller: PollerMetrics
 }
 
 /**
@@ -220,7 +225,7 @@ object WorkStealingPoolMetrics {
     }
 
   private def workStealingThreadPoolMetrics(
-      wstp: WorkStealingThreadPool[_]
+      wstp: WorkStealingThreadPool[_ <: AnyRef]
   ): WorkStealingPoolMetrics = new WorkStealingPoolMetrics {
     val identifier =
       wstp.id.toString
@@ -236,13 +241,14 @@ object WorkStealingPoolMetrics {
       List.range(0, workerThreadCount()).map(workerThreadMetrics(wstp, _))
   }
 
-  private def workerThreadMetrics(
-      wstp: WorkStealingThreadPool[_],
+  private def workerThreadMetrics[P <: AnyRef](
+      wstp: WorkStealingThreadPool[P],
       idx: Int
   ): WorkerThreadMetrics = new WorkerThreadMetrics {
     val index: Int = idx
     val localQueue: LocalQueueMetrics = localQueueMetrics(wstp.localQueues(index))
     val timerHeap: TimerHeapMetrics = timerHeapMetrics(wstp.sleepers(index))
+    val poller: PollerMetrics = wstp.system.metrics(wstp.pollers(index))
   }
 
   private def localQueueMetrics(queue: LocalQueue): LocalQueueMetrics =
