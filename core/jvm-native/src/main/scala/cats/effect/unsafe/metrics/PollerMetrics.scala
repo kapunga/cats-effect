@@ -29,9 +29,9 @@ trait PollerMetrics {
   def totalOperationsSubmittedCount(): Long
 
   /**
-   * The total number of I/O operations completed.
+   * The total number of I/O operations succeeded.
    */
-  def totalOperationsCompletedCount(): Long
+  def totalOperationsSucceededCount(): Long
 
   /**
    * The total number of I/O operations errored.
@@ -54,9 +54,9 @@ trait PollerMetrics {
   def totalAcceptOperationsSubmittedCount(): Long
 
   /**
-   * The total number of accept operations completed.
+   * The total number of accept operations succeeded.
    */
-  def totalAcceptOperationsCompletedCount(): Long
+  def totalAcceptOperationsSucceededCount(): Long
 
   /**
    * The total number of accept operations errored.
@@ -79,9 +79,9 @@ trait PollerMetrics {
   def totalConnectOperationsSubmittedCount(): Long
 
   /**
-   * The total number of connect operations completed.
+   * The total number of connect operations succeeded.
    */
-  def totalConnectOperationsCompletedCount(): Long
+  def totalConnectOperationsSucceededCount(): Long
 
   /**
    * The total number of connect operations errored.
@@ -104,9 +104,9 @@ trait PollerMetrics {
   def totalReadOperationsSubmittedCount(): Long
 
   /**
-   * The total number of read operations completed.
+   * The total number of read operations succeeded.
    */
-  def totalReadOperationsCompletedCount(): Long
+  def totalReadOperationsSucceededCount(): Long
 
   /**
    * The total number of read operations errored.
@@ -129,9 +129,9 @@ trait PollerMetrics {
   def totalWriteOperationsSubmittedCount(): Long
 
   /**
-   * The total number of write operations completed.
+   * The total number of write operations succeeded.
    */
-  def totalWriteOperationsCompletedCount(): Long
+  def totalWriteOperationsSucceededCount(): Long
 
   /**
    * The total number of write operations errored.
@@ -149,27 +149,27 @@ object PollerMetrics {
   private[effect] object noop extends PollerMetrics {
     def operationsOutstandingCount(): Int = 0
     def totalOperationsSubmittedCount(): Long = 0
-    def totalOperationsCompletedCount(): Long = 0
+    def totalOperationsSucceededCount(): Long = 0
     def totalOperationsErroredCount(): Long = 0
     def totalOperationsCanceledCount(): Long = 0
     def acceptOperationsOutstandingCount(): Int = 0
     def totalAcceptOperationsSubmittedCount(): Long = 0
-    def totalAcceptOperationsCompletedCount(): Long = 0
+    def totalAcceptOperationsSucceededCount(): Long = 0
     def totalAcceptOperationsErroredCount(): Long = 0
     def totalAcceptOperationsCanceledCount(): Long = 0
     def connectOperationsOutstandingCount(): Int = 0
     def totalConnectOperationsSubmittedCount(): Long = 0
-    def totalConnectOperationsCompletedCount(): Long = 0
+    def totalConnectOperationsSucceededCount(): Long = 0
     def totalConnectOperationsErroredCount(): Long = 0
     def totalConnectOperationsCanceledCount(): Long = 0
     def readOperationsOutstandingCount(): Int = 0
     def totalReadOperationsSubmittedCount(): Long = 0
-    def totalReadOperationsCompletedCount(): Long = 0
+    def totalReadOperationsSucceededCount(): Long = 0
     def totalReadOperationsErroredCount(): Long = 0
     def totalReadOperationsCanceledCount(): Long = 0
     def writeOperationsOutstandingCount(): Int = 0
     def totalWriteOperationsSubmittedCount(): Long = 0
-    def totalWriteOperationsCompletedCount(): Long = 0
+    def totalWriteOperationsSucceededCount(): Long = 0
     def totalWriteOperationsErroredCount(): Long = 0
     def totalWriteOperationsCanceledCount(): Long = 0
   }
