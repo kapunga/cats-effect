@@ -952,6 +952,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
     parked = pool.parkedSignals(newIdx)
     fiberBag = pool.fiberBags(newIdx)
     _poller = pool.pollers(newIdx)
+    metrics = pool.metrices(newIdx)
 
     // Reset the name of the thread to the regular prefix.
     val prefix = pool.threadPrefix
