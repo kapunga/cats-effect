@@ -72,7 +72,7 @@ object MapRef extends MapRefCompanionPlatform {
     List
       .fill(shardCount)(())
       .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
-      .map(fromSeqRefs(_))
+      .map(lst => fromSeqRefs(lst.toNeSeq.get))
   }
 
   /**
@@ -89,19 +89,19 @@ object MapRef extends MapRefCompanionPlatform {
     List
       .fill(shardCount)(())
       .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
-      .map(fromSeqRefs(_))
+      .map(lst => fromSeqRefs(lst.toNeSeq.get))
   }
 
   /**
-   * Creates a sharded map ref from a sequence of refs.
+   * Creates a sharded map ref from a nonempty sequence of refs.
    *
    * This uses universal hashCode and equality on K.
    */
   def fromSeqRefs[F[_]: Functor, K, V](
-      seq: scala.collection.immutable.Seq[Ref[F, Map[K, V]]]
+      seq: NonEmptySeq[Ref[F, Map[K, V]]]
   ): MapRef[F, K, Option[V]] = {
-    val array = seq.toArray
-    val shardCount = seq.size
+    val array = seq.toSeq.toArray
+    val shardCount = seq.size.toInt
     val refFunction = { (k: K) =>
       val location = Math.abs(k.## % shardCount)
       array(location)
