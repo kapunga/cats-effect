@@ -82,7 +82,7 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
             if (cb != null) {
               cb(value)
               polled = true
-              if (error ne null) poller.countCompletedOperation(readyOps)
+              if (error ne null) poller.countSucceededOperation(readyOps)
               else poller.countErroredOperation(node.interest)
             } else {
               poller.countCanceledOperation(node.interest)
@@ -167,11 +167,11 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
     private[this] var submittedConnects: Long = 0
     private[this] var submittedReads: Long = 0
     private[this] var submittedWrites: Long = 0
-    private[this] var completedOperations: Long = 0
-    private[this] var completedAccepts: Long = 0
-    private[this] var completedConnects: Long = 0
-    private[this] var completedReads: Long = 0
-    private[this] var completedWrites: Long = 0
+    private[this] var succeededOperations: Long = 0
+    private[this] var succeededAccepts: Long = 0
+    private[this] var succeededConnects: Long = 0
+    private[this] var succeededReads: Long = 0
+    private[this] var succeededWrites: Long = 0
     private[this] var erroredOperations: Long = 0
     private[this] var erroredAccepts: Long = 0
     private[this] var erroredConnects: Long = 0
@@ -204,24 +204,24 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
       }
     }
 
-    def countCompletedOperation(ops: Int): Unit = {
+    def countSucceededOperation(ops: Int): Unit = {
       outstandingOperations -= 1
-      completedOperations += 1
+      succeededOperations += 1
       if (isAccept(ops)) {
         outstandingAccepts -= 1
-        completedAccepts += 1
+        succeededAccepts += 1
       }
       if (isConnect(ops)) {
         outstandingConnects -= 1
-        completedConnects += 1
+        succeededConnects += 1
       }
       if (isRead(ops)) {
         outstandingReads -= 1
-        completedReads += 1
+        succeededReads += 1
       }
       if (isWrite(ops)) {
         outstandingWrites -= 1
-        completedWrites += 1
+        succeededWrites += 1
       }
     }
 
@@ -274,27 +274,27 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
 
     def operationsOutstandingCount(): Int = outstandingOperations
     def totalOperationsSubmittedCount(): Long = submittedOperations
-    def totalOperationsCompletedCount(): Long = completedOperations
+    def totalOperationsSucceededCount(): Long = succeededOperations
     def totalOperationsErroredCount(): Long = erroredOperations
     def totalOperationsCanceledCount(): Long = canceledOperations
     def acceptOperationsOutstandingCount(): Int = outstandingAccepts
     def totalAcceptOperationsSubmittedCount(): Long = submittedAccepts
-    def totalAcceptOperationsCompletedCount(): Long = completedAccepts
+    def totalAcceptOperationsSucceededCount(): Long = succeededAccepts
     def totalAcceptOperationsErroredCount(): Long = erroredAccepts
     def totalAcceptOperationsCanceledCount(): Long = canceledAccepts
     def connectOperationsOutstandingCount(): Int = outstandingConnects
     def totalConnectOperationsSubmittedCount(): Long = submittedConnects
-    def totalConnectOperationsCompletedCount(): Long = completedConnects
+    def totalConnectOperationsSucceededCount(): Long = succeededConnects
     def totalConnectOperationsErroredCount(): Long = erroredConnects
     def totalConnectOperationsCanceledCount(): Long = canceledConnects
     def readOperationsOutstandingCount(): Int = outstandingReads
     def totalReadOperationsSubmittedCount(): Long = submittedReads
-    def totalReadOperationsCompletedCount(): Long = completedReads
+    def totalReadOperationsSucceededCount(): Long = succeededReads
     def totalReadOperationsErroredCount(): Long = erroredReads
     def totalReadOperationsCanceledCount(): Long = canceledReads
     def writeOperationsOutstandingCount(): Int = outstandingWrites
     def totalWriteOperationsSubmittedCount(): Long = submittedWrites
-    def totalWriteOperationsCompletedCount(): Long = completedWrites
+    def totalWriteOperationsSucceededCount(): Long = succeededWrites
     def totalWriteOperationsErroredCount(): Long = erroredWrites
     def totalWriteOperationsCanceledCount(): Long = canceledWrites
   }
