@@ -72,7 +72,7 @@ object MapRef extends MapRefCompanionPlatform {
       List
         .fill(shardCount)(())
         .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
-        .map(fromNonEmptySeqRefs[F, K, V] compose NonEmptySeq.fromSeqUnsafe)
+        .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
     } else {
       ApplicativeError[F, Throwable].raiseError(
         new IllegalArgumentException("Shards count should be greater then zero")
@@ -95,7 +95,7 @@ object MapRef extends MapRefCompanionPlatform {
         List
           .fill(shardCount)(())
           .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
-          .map(fromNonEmptySeqRefs[F, K, V] compose NonEmptySeq.fromSeqUnsafe)
+          .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
       }
     } else {
       ApplicativeError[G, Throwable].raiseError(
