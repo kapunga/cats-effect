@@ -146,7 +146,7 @@ trait PollerMetrics {
 }
 
 object PollerMetrics {
-  private[unsafe] object noop extends PollerMetrics {
+  private[effect] object noop extends PollerMetrics {
     def operationsOutstandingCount(): Int = 0
     def totalOperationsSubmittedCount(): Long = 0
     def totalOperationsCompletedCount(): Long = 0
