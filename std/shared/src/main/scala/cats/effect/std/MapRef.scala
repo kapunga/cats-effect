@@ -59,7 +59,7 @@ object MapRef extends MapRefCompanionPlatform {
   }
 
   private def noShardsException = new IllegalArgumentException(
-    "Shards count should be greater then zero")
+    "Shards count should be greater than zero")
 
   /**
    * Creates a sharded map ref to reduce atomic contention on the Map, given an efficient and
