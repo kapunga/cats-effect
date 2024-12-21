@@ -58,6 +58,8 @@ object MapRef extends MapRefCompanionPlatform {
 
   }
 
+  private def noShardsException = new IllegalArgumentException("Shards count should be greater then zero")
+
   /**
    * Creates a sharded map ref to reduce atomic contention on the Map, given an efficient and
    * equally distributed hash, the contention should allow for interaction like a general
@@ -68,16 +70,13 @@ object MapRef extends MapRefCompanionPlatform {
   def ofShardedImmutableMap[F[_]: Concurrent, K, V](
       shardCount: Int
   ): F[MapRef[F, K, Option[V]]] = {
-    if (shardCount >= 1) {
+    if (shardCount >= 1)
       List
         .fill(shardCount)(())
         .traverse(_ => Concurrent[F].ref[Map[K, V]](Map.empty))
         .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
-    } else {
-      ApplicativeError[F, Throwable].raiseError(
-        new IllegalArgumentException("Shards count should be greater then zero")
-      )
-    }
+    else
+      ApplicativeError[F, Throwable].raiseError(noShardsException)
   }
 
   /**
@@ -90,16 +89,13 @@ object MapRef extends MapRefCompanionPlatform {
   def inShardedImmutableMap[G[_]: Sync, F[_]: Sync, K, V](
       shardCount: Int
   ): G[MapRef[F, K, Option[V]]] = {
-    if (shardCount >= 1) {
+    if (shardCount >= 1)
       List
         .fill(shardCount)(())
         .traverse(_ => Ref.in[G, F, Map[K, V]](Map.empty))
         .map(lst => fromNonEmptySeqRefs(NonEmptySeq.fromSeqUnsafe(lst)))
-    } else {
-      ApplicativeError[G, Throwable].raiseError(
-        new IllegalArgumentException("Shards count should be greater then zero")
-      )
-    }
+    else
+      ApplicativeError[G, Throwable].raiseError(noShardsException)
   }
 
   /**
@@ -110,15 +106,10 @@ object MapRef extends MapRefCompanionPlatform {
   @deprecated("Use fromNonEmptySeqRefs instead", "3.6.0")
   def fromSeqRefs[F[_]: Functor, K, V](
       seq: scala.collection.immutable.Seq[Ref[F, Map[K, V]]]
-  ): MapRef[F, K, Option[V]] = {
-    val array = seq.toArray
-    val shardCount = array.length
-    val refFunction = { (k: K) =>
-      val location = Math.abs(k.## % shardCount)
-      array(location)
-    }
-    k => fromSingleImmutableMapRef(refFunction(k)).apply(k)
-  }
+  ): MapRef[F, K, Option[V]] =
+    fromNonEmptySeqRefs(
+      seq.toNeSeq.getOrElse(throw noShardsException)
+    )
 
   /**
    * Creates a sharded map ref from a nonempty sequence of refs.
