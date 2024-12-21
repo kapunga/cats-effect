@@ -107,7 +107,7 @@ object MapRef extends MapRefCompanionPlatform {
    *
    * This uses universal hashCode and equality on K.
    */
-  @deprecated("Use fromNonEmptySeqRefs instead", "3.5.0")
+  @deprecated("Use fromNonEmptySeqRefs instead", "3.6.0")
   def fromSeqRefs[F[_]: Functor, K, V](
       seq: scala.collection.immutable.Seq[Ref[F, Map[K, V]]]
   ): MapRef[F, K, Option[V]] = {
