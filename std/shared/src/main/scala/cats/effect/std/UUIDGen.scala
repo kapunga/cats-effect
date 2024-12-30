@@ -16,7 +16,7 @@
 
 package cats.effect.std
 
-import cats.Functor
+import cats.{~>, Functor}
 import cats.implicits._
 
 import java.util.UUID
@@ -24,7 +24,7 @@ import java.util.UUID
 /**
  * A purely functional UUID Generator
  */
-trait UUIDGen[F[_]] {
+trait UUIDGen[F[_]] { self =>
 
   /**
    * Generates a UUID in a pseudorandom manner.
@@ -32,13 +32,24 @@ trait UUIDGen[F[_]] {
    *   randomly generated UUID
    */
   def randomUUID: F[UUID]
+
+  /**
+   * Modifies the context in which this [[UUIDGen]] operates using the natural transformation
+   * `f`.
+   *
+   * @return
+   *   a [[UUIDGen]] in the new context obtained by mapping the current one using `f`
+   */
+  def mapK[G[_]](f: F ~> G): UUIDGen[G] =
+    new UUIDGen.TranslatedUUIDGen[F, G](self)(f) {}
 }
 
 object UUIDGen extends UUIDGenCompanionPlatform {
   def apply[F[_]](implicit ev: UUIDGen[F]): UUIDGen[F] = ev
 
   def randomUUID[F[_]: UUIDGen]: F[UUID] = UUIDGen[F].randomUUID
-  def randomString[F[_]: UUIDGen: Functor]: F[String] = randomUUID.map(_.toString)
+  def randomString[F[_]](implicit gen: UUIDGen[F], F: Functor[F]): F[String] =
+    randomUUID(gen).map(_.toString)
 
   implicit def fromSecureRandom[F[_]: Functor: SecureRandom]: UUIDGen[F] =
     new UUIDGen[F] {
@@ -59,4 +70,11 @@ object UUIDGen extends UUIDGenCompanionPlatform {
         new UUID(msb, lsb)
       }
     }
+
+  private[std] abstract class TranslatedUUIDGen[F[_], G[_]](self: UUIDGen[F])(f: F ~> G)
+      extends UUIDGen[G] {
+    override def randomUUID: G[UUID] =
+      f(self.randomUUID)
+
+  }
 }

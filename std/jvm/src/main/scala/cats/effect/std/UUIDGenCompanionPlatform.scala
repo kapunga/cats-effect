@@ -16,6 +16,8 @@
 
 package cats.effect.std
 
+import cats.Functor
+import cats.data.OptionT
 import cats.effect.kernel.Sync
 
 import java.util.UUID
@@ -32,5 +34,12 @@ private[std] trait UUIDGenCompanionPlatformLowPriority {
     override final val randomUUID: F[UUID] =
       ev.blocking(UUID.randomUUID())
   }
+
+  /**
+   * [[UUIDGen]] instance built for `cats.data.OptionT` values initialized with any `F` data
+   * type that also implements `UUIDGen`.
+   */
+  implicit def catsOptionTUUIDGen[F[_]: UUIDGen: Functor]: UUIDGen[OptionT[F, *]] =
+    UUIDGen[F].mapK(OptionT.liftK)
 
 }
