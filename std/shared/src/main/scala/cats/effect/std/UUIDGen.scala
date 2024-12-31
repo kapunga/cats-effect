@@ -50,7 +50,7 @@ trait UUIDGen[F[_]] { self =>
    *   a [[UUIDGen]] in the new context obtained by mapping the current one using `f`
    */
   def mapK[G[_]](f: F ~> G): UUIDGen[G] =
-    new UUIDGen.TranslatedUUIDGen[F, G](self)(f) {}
+    new UUIDGen.TranslatedUUIDGen[F, G](self)(f)
 }
 
 object UUIDGen extends UUIDGenCompanionPlatform {
@@ -138,7 +138,7 @@ object UUIDGen extends UUIDGenCompanionPlatform {
       }
     }
 
-  private[std] abstract class TranslatedUUIDGen[F[_], G[_]](self: UUIDGen[F])(f: F ~> G)
+  private[std] final class TranslatedUUIDGen[F[_], G[_]](self: UUIDGen[F])(f: F ~> G)
       extends UUIDGen[G] {
     override def randomUUID: G[UUID] =
       f(self.randomUUID)
