@@ -568,12 +568,7 @@ trait IOApp {
               r.run()
             } catch {
               case t if NonFatal(t) =>
-                if (isForked) {
-                  t.printStackTrace()
-                  System.exit(1)
-                } else {
-                  throw t
-                }
+                IOApp.this.reportFailure(t).unsafeRunAndForgetWithoutCallback()(runtime)
 
               case t: Throwable =>
                 t.printStackTrace()

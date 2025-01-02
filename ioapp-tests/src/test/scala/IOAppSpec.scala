@@ -354,6 +354,11 @@ class IOAppSpec extends Specification {
         h.awaitStatus() mustEqual 0
       }
 
+      "use configurable reportFailure for runnables on MainThread" in {
+        val h = platform("MainThreadReportFailureRunnable", List.empty)
+        h.awaitStatus() mustEqual 0
+      }
+
       "warn on blocked threads" in {
         val h = platform("BlockedThreads", List.empty)
         h.awaitStatus()
