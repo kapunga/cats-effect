@@ -96,7 +96,8 @@ class SelectorSpec extends BaseSpec {
         IORuntime.builder().setCompute(pool, shutdown).addPoller(poller, () => ()).build()
 
       try {
-        val test = Selector.get
+        val test = Selector
+          .get
           .flatMap { selector =>
             mkPipe.allocated.flatMap {
               case (pipe, close) =>
