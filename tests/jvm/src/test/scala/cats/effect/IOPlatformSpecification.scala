@@ -546,6 +546,71 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
         }
       }
 
+      "poll punctually on a single-thread runtime with concurrent sleepers" in {
+
+        trait DummyPoller {
+          def poll: IO[Unit]
+        }
+
+        object DummySystem extends PollingSystem {
+          type Api = DummyPoller
+          type Poller = AtomicReference[List[Either[Throwable, Unit] => Unit]]
+
+          def close() = ()
+
+          def makePoller() = new AtomicReference(List.empty[Either[Throwable, Unit] => Unit])
+          def needsPoll(poller: Poller) = poller.get.nonEmpty
+          def closePoller(poller: Poller) = ()
+          def metrics(poller: Poller): PollerMetrics = PollerMetrics.noop
+
+          def interrupt(targetThread: Thread, targetPoller: Poller) =
+            SleepSystem.interrupt(targetThread, SleepSystem.makePoller())
+
+          def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit) = {
+            poller.getAndSet(Nil) match {
+              case Nil =>
+                SleepSystem.poll(SleepSystem.makePoller(), nanos, reportFailure)
+              case cbs =>
+                cbs.foreach(_.apply(Right(())))
+                true
+            }
+          }
+
+          def makeApi(ctx: PollingContext[Poller]): DummySystem.Api =
+            new DummyPoller {
+              def poll = IO.async_[Unit] { cb =>
+                ctx.accessPoller { poller =>
+                  poller.getAndUpdate(cb :: _)
+                  ()
+                }
+              }
+            }
+        }
+
+        val (pool, poller, shutdown) = IORuntime.createWorkStealingComputeThreadPool(
+          threads = 1,
+          pollingSystem = DummySystem)
+
+        implicit val runtime: IORuntime =
+          IORuntime.builder().setCompute(pool, shutdown).addPoller(poller, () => ()).build()
+
+        try {
+          val test = IO.sleep(1.minute).background.surround {
+            IO.pollers.map(_.head.asInstanceOf[DummyPoller]).flatMap { poller =>
+              // in #4225 the fiber rescheduled during this poll does not execute until the next timer fires
+              poller.poll.as(true)
+            }
+          }
+
+          // NOTE!!!
+          // We cannot use a timeout *on* the runtime, because that causes the polling fiber
+          // to become unstuck sooner and pass the test
+          test.unsafeRunTimed(1.second) must beSome(beTrue)
+        } finally {
+          runtime.shutdown()
+        }
+      }
+
       if (javaMajorVersion >= 21)
         "block in-place on virtual threads" in real {
           val loomExec = classOf[Executors]
