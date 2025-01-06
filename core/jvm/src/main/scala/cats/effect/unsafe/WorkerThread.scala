@@ -474,21 +474,18 @@ private[effect] final class WorkerThread[P <: AnyRef](
               pool.shutdown()
               false // we know `done` is `true`
             } else {
-              if (parked.get()) {
-                // we were either awakened spuriously, or we timed out or polled an event
-                if (polled || (triggerTime - now <= 0)) {
-                  // we timed out or polled an event
-                  if (parked.getAndSet(false)) {
-                    pool.doneSleeping()
-                  }
-                  true
-                } else {
-                  // awakened spuriously, re-check next sleeper
-                  parkUntilNextSleeper()
+              // no matter why we woke up, there may be timers or events ready
+              if (polled || (triggerTime - now <= 0)) {
+                // we timed out or polled an event
+                if (parked.getAndSet(false)) {
+                  pool.doneSleeping()
                 }
-              } else {
-                // awakened intentionally
-                false
+                true
+              } else { // we were either awakened spuriously or intentionally
+                if (parked.get()) // awakened spuriously, re-check next sleeper
+                  parkUntilNextSleeper()
+                else // awakened intentionally, but not due to a timer or event
+                  false
               }
             }
           } else {
