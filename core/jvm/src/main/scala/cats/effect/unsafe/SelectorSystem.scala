@@ -41,7 +41,7 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
   def closePoller(poller: Poller): Unit =
     poller.selector.close()
 
-  def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit): Boolean = {
+  def poll(poller: Poller, nanos: Long): Boolean = {
     val millis = if (nanos >= 0) nanos / 1000000 else -1
     val selector = poller.selector
 
@@ -49,52 +49,56 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
     else if (millis > 0) selector.select(millis)
     else selector.select()
 
-    if (selector.isOpen()) { // closing selector interrupts select
-      var polled = false
+    // closing selector interrupts select
+    selector.isOpen() && !selector.selectedKeys().isEmpty()
+  }
 
-      val ready = selector.selectedKeys().iterator()
-      while (ready.hasNext()) {
-        val key = ready.next()
-        ready.remove()
+  def processReadyEvents(poller: Poller): Boolean = {
+    val selector = poller.selector
+    var fibersRescheduled = false
 
-        var readyOps = 0
-        var error: Throwable = null
-        try {
-          readyOps = key.readyOps()
-          // reset interest in triggered ops
-          key.interestOps(key.interestOps() & ~readyOps)
-        } catch {
-          case ex if NonFatal(ex) =>
-            error = ex
-            readyOps = -1 // interest all waiters
-        }
+    val ready = selector.selectedKeys().iterator()
+    while (ready.hasNext()) {
+      val key = ready.next()
+      ready.remove()
 
-        val value = if (error ne null) Left(error) else Right(readyOps)
-
-        val callbacks = key.attachment().asInstanceOf[Callbacks]
-        val iter = callbacks.iterator()
-        while (iter.hasNext()) {
-          val node = iter.next()
-
-          if ((node.interest & readyOps) != 0) { // drop this node and execute callback
-            node.remove()
-            val cb = node.callback
-            if (cb != null) {
-              cb(value)
-              polled = true
-              if (error ne null) poller.countSucceededOperation(readyOps)
-              else poller.countErroredOperation(node.interest)
-            } else {
-              poller.countCanceledOperation(node.interest)
-            }
-          }
-        }
-
-        ()
+      var readyOps = 0
+      var error: Throwable = null
+      try {
+        readyOps = key.readyOps()
+        // reset interest in triggered ops
+        key.interestOps(key.interestOps() & ~readyOps)
+      } catch {
+        case ex if NonFatal(ex) =>
+          error = ex
+          readyOps = -1 // interest all waiters
       }
 
-      polled
-    } else false
+      val value = if (error ne null) Left(error) else Right(readyOps)
+
+      val callbacks = key.attachment().asInstanceOf[Callbacks]
+      val iter = callbacks.iterator()
+      while (iter.hasNext()) {
+        val node = iter.next()
+
+        if ((node.interest & readyOps) != 0) { // drop this node and execute callback
+          node.remove()
+          val cb = node.callback
+          if (cb != null) {
+            cb(value)
+            fibersRescheduled = true
+            if (error ne null) poller.countSucceededOperation(readyOps)
+            else poller.countErroredOperation(node.interest)
+          } else {
+            poller.countCanceledOperation(node.interest)
+          }
+        }
+      }
+
+      ()
+    }
+
+    fibersRescheduled
   }
 
   def needsPoll(poller: Poller): Boolean =

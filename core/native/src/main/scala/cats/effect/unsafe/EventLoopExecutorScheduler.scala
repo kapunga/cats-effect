@@ -127,9 +127,11 @@ private[effect] final class EventLoopExecutorScheduler[P](
        * the Scala Native global `ExecutionContext` which is currently hard-coded into every
        * test framework, including MUnit, specs2, and Weaver.
        */
-      if (system.needsPoll(poller) || timeout != -1)
-        system.poll(poller, timeout, reportFailure)
-      else ()
+      if (system.needsPoll(poller) || timeout != -1) {
+        if (system.poll(poller, timeout)) {
+          val _ = system.processReadyEvents(poller)
+        }
+      }
 
       continue = !executeQueue.isEmpty() || !sleepQueue.isEmpty() || system.needsPoll(poller)
     }

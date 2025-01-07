@@ -30,7 +30,7 @@ import scala.scalanative.meta.LinktimeInfo
 import scala.scalanative.posix.errno._
 import scala.scalanative.posix.string._
 import scala.scalanative.posix.unistd
-import scala.scalanative.runtime._
+import scala.scalanative.runtime.{Array => _, _}
 import scala.scalanative.unsafe._
 import scala.scalanative.unsigned._
 
@@ -60,8 +60,11 @@ object EpollSystem extends PollingSystem {
 
   def closePoller(poller: Poller): Unit = poller.close()
 
-  def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit): Boolean =
+  def poll(poller: Poller, nanos: Long): Boolean =
     poller.poll(nanos)
+
+  def processReadyEvents(poller: Poller): Boolean =
+    poller.processReadyEvents()
 
   def needsPoll(poller: Poller): Boolean = poller.needsPoll()
 
@@ -182,44 +185,50 @@ object EpollSystem extends PollingSystem {
     private[this] val handles: Set[PollHandle] =
       Collections.newSetFromMap(new IdentityHashMap)
 
+    private[this] val eventsArray = new Array[Byte](sizeof[epoll_event].toInt * MaxEvents)
+    @inline private[this] def events = eventsArray.atUnsafe(0).asInstanceOf[Ptr[epoll_event]]
+    private[this] var readyEventCount: Int = 0
+
     private[EpollSystem] def close(): Unit =
       if (unistd.close(epfd) != 0)
         throw new IOException(fromCString(strerror(errno)))
 
     private[EpollSystem] def poll(timeout: Long): Boolean = {
 
-      val events = stackalloc[epoll_event](MaxEvents.toULong)
-      var polled = false
+      val timeoutMillis = if (timeout == -1) -1 else (timeout / 1000000).toInt
+      val rtn = epoll_wait(epfd, events, MaxEvents, timeoutMillis)
+      if (rtn >= 0) {
+        readyEventCount = rtn
+        rtn > 0
+      } else if (errno == EINTR) { // spurious wake-up by signal
+        false
+      } else {
+        throw new IOException(fromCString(strerror(errno)))
+      }
+    }
 
-      @tailrec
-      def processEvents(timeout: Int): Unit = {
-
-        val triggeredEvents = epoll_wait(epfd, events, MaxEvents, timeout)
-
-        if (triggeredEvents >= 0) {
-          polled = true
-
-          var i = 0
-          while (i < triggeredEvents) {
-            val event = events + i.toLong
-            val handle = fromPtr(event.data)
-            handle.notify(event.events.toInt)
-            i += 1
-          }
-        } else if (errno != EINTR) { // spurious wake-up by signal
-          throw new IOException(fromCString(strerror(errno)))
-        }
-
-        if (triggeredEvents >= MaxEvents)
-          processEvents(0) // drain the ready list
-        else
-          ()
+    @tailrec
+    private[EpollSystem] def processReadyEvents(): Boolean = {
+      var i = 0
+      while (i < readyEventCount) {
+        val event = events + i.toLong
+        val handle = fromPtr(event.data)
+        handle.notify(event.events.toInt)
+        i += 1
       }
 
-      val timeoutMillis = if (timeout == -1) -1 else (timeout / 1000000).toInt
-      processEvents(timeoutMillis)
-
-      polled
+      if (readyEventCount >= MaxEvents) { // drain the ready list
+        val rtn = epoll_wait(epfd, events, MaxEvents, 0)
+        if (rtn >= 0) {
+          readyEventCount = rtn
+          processReadyEvents()
+        } else {
+          throw new IOException(fromCString(strerror(errno)))
+        }
+      } else {
+        readyEventCount = 0
+        true
+      }
     }
 
     private[EpollSystem] def needsPoll(): Boolean = !handles.isEmpty()

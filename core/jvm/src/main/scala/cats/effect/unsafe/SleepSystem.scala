@@ -34,7 +34,7 @@ object SleepSystem extends PollingSystem {
 
   def closePoller(Poller: Poller): Unit = ()
 
-  def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit): Boolean = {
+  def poll(poller: Poller, nanos: Long): Boolean = {
     if (nanos < 0)
       LockSupport.park()
     else if (nanos > 0)
@@ -43,6 +43,8 @@ object SleepSystem extends PollingSystem {
       ()
     false
   }
+
+  def processReadyEvents(poller: Poller): Boolean = false
 
   def needsPoll(poller: Poller): Boolean = false
 

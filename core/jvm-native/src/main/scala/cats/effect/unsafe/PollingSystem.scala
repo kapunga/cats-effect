@@ -72,6 +72,8 @@ abstract class PollingSystem {
   def closePoller(poller: Poller): Unit
 
   /**
+   * Blocks the thread until an event is polled, the timeout expires, or interrupted.
+   *
    * @param poller
    *   the thread-local [[Poller]] used to poll events.
    *
@@ -79,18 +81,28 @@ abstract class PollingSystem {
    *   the maximum duration for which to block, where `nanos == -1` indicates to block
    *   indefinitely.
    *
-   * @param reportFailure
-   *   callback that handles any failures that occur during polling.
+   * @return
+   *   whether any events are ready. e.g. if the method returned due to timeout, this should be
+   *   `false`. If `true`, [[processReadyEvents]] must be called before calling any other method
+   *   on this poller.
+   */
+  def poll(poller: Poller, nanos: Long): Boolean
+
+  /**
+   * Processes ready events e.g. collects their results and resumes the corresponding tasks.
+   * This method should only be called after [[poll]] and only if it returned `true`.
+   *
+   * @param poller
+   *   the thread-local [[Poller]] with ready events
    *
    * @return
-   *   whether any events were polled. e.g. if the method returned due to timeout, this should
-   *   be `false`.
+   *   whether any of the ready events caused tasks to be rescheduled on the runtime
    */
-  def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit): Boolean
+  def processReadyEvents(poller: Poller): Boolean
 
   /**
    * @return
-   *   whether poll should be called again (i.e., there are more events to be polled)
+   *   whether [[poll]] should be called again (i.e., there are more events to be polled)
    */
   def needsPoll(poller: Poller): Boolean
 
