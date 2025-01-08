@@ -32,10 +32,10 @@ object SleepSystem extends PollingSystem {
 
   def closePoller(poller: Poller): Unit = ()
 
-  def poll(poller: Poller, nanos: Long): Boolean = {
+  def poll(poller: Poller, nanos: Long): PollResult = {
     if (nanos > 0)
       Thread.sleep(nanos / 1000000, (nanos % 1000000).toInt)
-    false
+    PollResult.Interrupted
   }
 
   def processReadyEvents(poller: Poller): Boolean = false

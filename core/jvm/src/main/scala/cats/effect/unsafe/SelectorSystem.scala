@@ -41,7 +41,7 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
   def closePoller(poller: Poller): Unit =
     poller.selector.close()
 
-  def poll(poller: Poller, nanos: Long): Boolean = {
+  def poll(poller: Poller, nanos: Long): PollResult = {
     val millis = if (nanos >= 0) nanos / 1000000 else -1
     val selector = poller.selector
 
@@ -50,7 +50,10 @@ final class SelectorSystem private (provider: SelectorProvider) extends PollingS
     else selector.select()
 
     // closing selector interrupts select
-    selector.isOpen() && !selector.selectedKeys().isEmpty()
+    if (selector.isOpen() && !selector.selectedKeys().isEmpty())
+      PollResult.Complete
+    else
+      PollResult.Interrupted
   }
 
   def processReadyEvents(poller: Poller): Boolean = {

@@ -23,7 +23,6 @@ import cats.syntax.all._
 
 import org.typelevel.scalaccompat.annotation._
 
-import scala.annotation.tailrec
 import scala.scalanative.annotation.alwaysinline
 import scala.scalanative.libc.errno._
 import scala.scalanative.meta.LinktimeInfo
@@ -60,7 +59,7 @@ object EpollSystem extends PollingSystem {
 
   def closePoller(poller: Poller): Unit = poller.close()
 
-  def poll(poller: Poller, nanos: Long): Boolean =
+  def poll(poller: Poller, nanos: Long): PollResult =
     poller.poll(nanos)
 
   def processReadyEvents(poller: Poller): Boolean =
@@ -193,21 +192,22 @@ object EpollSystem extends PollingSystem {
       if (unistd.close(epfd) != 0)
         throw new IOException(fromCString(strerror(errno)))
 
-    private[EpollSystem] def poll(timeout: Long): Boolean = {
+    private[EpollSystem] def poll(timeout: Long): PollResult = {
 
       val timeoutMillis = if (timeout == -1) -1 else (timeout / 1000000).toInt
       val rtn = epoll_wait(epfd, events, MaxEvents, timeoutMillis)
       if (rtn >= 0) {
         readyEventCount = rtn
-        rtn > 0
+        if (rtn > 0) {
+          if (rtn < MaxEvents) PollResult.Complete else PollResult.Incomplete
+        } else PollResult.Interrupted
       } else if (errno == EINTR) { // spurious wake-up by signal
-        false
+        PollResult.Interrupted
       } else {
         throw new IOException(fromCString(strerror(errno)))
       }
     }
 
-    @tailrec
     private[EpollSystem] def processReadyEvents(): Boolean = {
       var i = 0
       while (i < readyEventCount) {
@@ -216,19 +216,8 @@ object EpollSystem extends PollingSystem {
         handle.notify(event.events.toInt)
         i += 1
       }
-
-      if (readyEventCount >= MaxEvents) { // drain the ready list
-        val rtn = epoll_wait(epfd, events, MaxEvents, 0)
-        if (rtn >= 0) {
-          readyEventCount = rtn
-          processReadyEvents()
-        } else {
-          throw new IOException(fromCString(strerror(errno)))
-        }
-      } else {
-        readyEventCount = 0
-        true
-      }
+      readyEventCount = 0
+      true
     }
 
     private[EpollSystem] def needsPoll(): Boolean = !handles.isEmpty()

@@ -21,6 +21,7 @@ import cats.effect.unsafe.{
   IORuntime,
   IORuntimeConfig,
   PollingContext,
+  PollResult,
   PollingSystem,
   SleepSystem,
   WorkStealingThreadPool
@@ -508,7 +509,7 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
           poller.get() match {
             case Nil =>
               SleepSystem.poll(SleepSystem.makePoller(), nanos)
-            case _ => true
+            case _ => PollResult.Complete
           }
         }
 

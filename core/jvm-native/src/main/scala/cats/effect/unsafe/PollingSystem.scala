@@ -82,15 +82,14 @@ abstract class PollingSystem {
    *   indefinitely.
    *
    * @return
-   *   whether any events are ready. e.g. if the method returned due to timeout, this should be
-   *   `false`. If `true`, [[processReadyEvents]] must be called before calling any other method
-   *   on this poller.
+   *   whether any ready events were polled and should be handled with [[processReadyEvents]].
+   *   If result is incomplete, then [[poll]] should be called again after
+   *   [[processReadyEvents]].
    */
-  def poll(poller: Poller, nanos: Long): Boolean
+  def poll(poller: Poller, nanos: Long): PollResult
 
   /**
    * Processes ready events e.g. collects their results and resumes the corresponding tasks.
-   * This method should only be called after [[poll]] and only if it returned `true`.
    *
    * @param poller
    *   the thread-local [[Poller]] with ready events
@@ -148,4 +147,24 @@ object PollingSystem {
   type WithPoller[P] = PollingSystem {
     type Poller = P
   }
+}
+
+sealed abstract class PollResult
+object PollResult {
+
+  /**
+   * Polled all of the available ready events.
+   */
+  case object Complete extends PollResult
+
+  /**
+   * Polled some, but not all, of the available ready events. Poll should be called again to
+   * reap additional ready events.
+   */
+  case object Incomplete extends PollResult
+
+  /**
+   * The poll was interrupted or timed out before any events became ready.
+   */
+  case object Interrupted extends PollResult
 }

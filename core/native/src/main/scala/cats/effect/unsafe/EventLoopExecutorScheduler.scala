@@ -17,6 +17,7 @@
 package cats.effect
 package unsafe
 
+import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.concurrent.duration._
 import scala.scalanative.libc.errno._
@@ -128,9 +129,13 @@ private[effect] final class EventLoopExecutorScheduler[P](
        * test framework, including MUnit, specs2, and Weaver.
        */
       if (system.needsPoll(poller) || timeout != -1) {
-        if (system.poll(poller, timeout)) {
-          val _ = system.processReadyEvents(poller)
-        }
+        @tailrec def loop(result: PollResult): Unit =
+          if (result ne PollResult.Interrupted) {
+            system.processReadyEvents(poller)
+            if (result eq PollResult.Incomplete) loop(system.poll(poller, 0))
+          }
+
+        loop(system.poll(poller, timeout))
       }
 
       continue = !executeQueue.isEmpty() || !sleepQueue.isEmpty() || system.needsPoll(poller)
