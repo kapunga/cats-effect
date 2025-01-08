@@ -17,15 +17,7 @@
 package cats.effect
 
 import cats.effect.std.Semaphore
-import cats.effect.unsafe.{
-  IORuntime,
-  IORuntimeConfig,
-  PollingContext,
-  PollResult,
-  PollingSystem,
-  SleepSystem,
-  WorkStealingThreadPool
-}
+import cats.effect.unsafe.{IORuntime, IORuntimeConfig, PollResult, PollingContext, PollingSystem, SleepSystem, WorkStealingThreadPool}
 import cats.effect.unsafe.metrics.PollerMetrics
 import cats.syntax.all._
 
