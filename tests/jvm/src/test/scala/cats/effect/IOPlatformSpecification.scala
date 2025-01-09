@@ -20,6 +20,7 @@ import cats.effect.std.Semaphore
 import cats.effect.unsafe.{
   IORuntime,
   IORuntimeConfig,
+  PollResult,
   PollingContext,
   PollingSystem,
   SleepSystem,
@@ -486,46 +487,54 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
         ok
       }
 
-      "wake parked thread for polled events" in {
+      trait DummyPoller {
+        def poll: IO[Unit]
+      }
 
-        trait DummyPoller {
-          def poll: IO[Unit]
+      object DummySystem extends PollingSystem {
+        type Api = DummyPoller
+        type Poller = AtomicReference[List[Either[Throwable, Unit] => Unit]]
+
+        def close() = ()
+
+        def makePoller() = new AtomicReference(List.empty[Either[Throwable, Unit] => Unit])
+        def needsPoll(poller: Poller) = poller.get.nonEmpty
+        def closePoller(poller: Poller) = ()
+        def metrics(poller: Poller): PollerMetrics = PollerMetrics.noop
+
+        def interrupt(targetThread: Thread, targetPoller: Poller) =
+          SleepSystem.interrupt(targetThread, SleepSystem.makePoller())
+
+        def poll(poller: Poller, nanos: Long) = {
+          poller.get() match {
+            case Nil =>
+              SleepSystem.poll(SleepSystem.makePoller(), nanos)
+            case _ => PollResult.Complete
+          }
         }
 
-        object DummySystem extends PollingSystem {
-          type Api = DummyPoller
-          type Poller = AtomicReference[List[Either[Throwable, Unit] => Unit]]
-
-          def close() = ()
-
-          def makePoller() = new AtomicReference(List.empty[Either[Throwable, Unit] => Unit])
-          def needsPoll(poller: Poller) = poller.get.nonEmpty
-          def closePoller(poller: Poller) = ()
-          def metrics(poller: Poller): PollerMetrics = PollerMetrics.noop
-
-          def interrupt(targetThread: Thread, targetPoller: Poller) =
-            SleepSystem.interrupt(targetThread, SleepSystem.makePoller())
-
-          def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit) = {
-            poller.getAndSet(Nil) match {
-              case Nil =>
-                SleepSystem.poll(SleepSystem.makePoller(), nanos, reportFailure)
-              case cbs =>
-                cbs.foreach(_.apply(Right(())))
-                true
-            }
+        def processReadyEvents(poller: Poller) = {
+          poller.getAndSet(Nil) match {
+            case Nil =>
+              false
+            case cbs =>
+              cbs.foreach(_.apply(Right(())))
+              true
           }
+        }
 
-          def makeApi(ctx: PollingContext[Poller]): DummySystem.Api =
-            new DummyPoller {
-              def poll = IO.async_[Unit] { cb =>
-                ctx.accessPoller { poller =>
-                  poller.getAndUpdate(cb :: _)
-                  ()
-                }
+        def makeApi(ctx: PollingContext[Poller]): DummySystem.Api =
+          new DummyPoller {
+            def poll = IO.async_[Unit] { cb =>
+              ctx.accessPoller { poller =>
+                poller.getAndUpdate(cb :: _)
+                ()
               }
             }
-        }
+          }
+      }
+
+      "wake parked thread for polled events" in {
 
         val (pool, poller, shutdown) = IORuntime.createWorkStealingComputeThreadPool(
           threads = 2,
@@ -547,45 +556,6 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
       }
 
       "poll punctually on a single-thread runtime with concurrent sleepers" in {
-
-        trait DummyPoller {
-          def poll: IO[Unit]
-        }
-
-        object DummySystem extends PollingSystem {
-          type Api = DummyPoller
-          type Poller = AtomicReference[List[Either[Throwable, Unit] => Unit]]
-
-          def close() = ()
-
-          def makePoller() = new AtomicReference(List.empty[Either[Throwable, Unit] => Unit])
-          def needsPoll(poller: Poller) = poller.get.nonEmpty
-          def closePoller(poller: Poller) = ()
-          def metrics(poller: Poller): PollerMetrics = PollerMetrics.noop
-
-          def interrupt(targetThread: Thread, targetPoller: Poller) =
-            SleepSystem.interrupt(targetThread, SleepSystem.makePoller())
-
-          def poll(poller: Poller, nanos: Long, reportFailure: Throwable => Unit) = {
-            poller.getAndSet(Nil) match {
-              case Nil =>
-                SleepSystem.poll(SleepSystem.makePoller(), nanos, reportFailure)
-              case cbs =>
-                cbs.foreach(_.apply(Right(())))
-                true
-            }
-          }
-
-          def makeApi(ctx: PollingContext[Poller]): DummySystem.Api =
-            new DummyPoller {
-              def poll = IO.async_[Unit] { cb =>
-                ctx.accessPoller { poller =>
-                  poller.getAndUpdate(cb :: _)
-                  ()
-                }
-              }
-            }
-        }
 
         val (pool, poller, shutdown) = IORuntime.createWorkStealingComputeThreadPool(
           threads = 1,
