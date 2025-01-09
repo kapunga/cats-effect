@@ -79,7 +79,8 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       reportFailure: Throwable => Unit = _.printStackTrace(),
       blockedThreadDetectionEnabled: Boolean = false,
       shutdownTimeout: Duration = 1.second,
-      pollingSystem: PollingSystem = SelectorSystem())
+      pollingSystem: PollingSystem = SelectorSystem(),
+      uncaughtExceptionHandler: Thread.UncaughtExceptionHandler = (_, ex) => ex.printStackTrace())
       : (WorkStealingThreadPool[_], pollingSystem.Api, () => Unit) = {
     val threadPool =
       new WorkStealingThreadPool[pollingSystem.Poller](
@@ -90,7 +91,8 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
         blockedThreadDetectionEnabled && (threads > 1),
         shutdownTimeout,
         pollingSystem,
-        reportFailure
+        reportFailure,
+        uncaughtExceptionHandler
       )
 
     val unregisterMBeans =

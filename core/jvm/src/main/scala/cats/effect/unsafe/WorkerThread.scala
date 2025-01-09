@@ -63,6 +63,8 @@ private[effect] final class WorkerThread[P <: AnyRef](
     extends Thread
     with BlockContext {
 
+  setUncaughtExceptionHandler(pool.uncaughtExceptionHandler)
+
   import TracingConstants._
   import WorkStealingThreadPoolConstants._
 
