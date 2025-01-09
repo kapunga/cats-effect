@@ -80,8 +80,9 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       blockedThreadDetectionEnabled: Boolean = false,
       shutdownTimeout: Duration = 1.second,
       pollingSystem: PollingSystem = SelectorSystem(),
-      uncaughtExceptionHandler: Thread.UncaughtExceptionHandler = (_, ex) => ex.printStackTrace())
-      : (WorkStealingThreadPool[_], pollingSystem.Api, () => Unit) = {
+      uncaughtExceptionHandler: Thread.UncaughtExceptionHandler = (_, ex) =>
+        ex.printStackTrace()
+  ): (WorkStealingThreadPool[_], pollingSystem.Api, () => Unit) = {
     val threadPool =
       new WorkStealingThreadPool[pollingSystem.Poller](
         threads,
