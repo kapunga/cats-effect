@@ -35,8 +35,7 @@ package examples {
     override protected def runtimeConfig =
       super.runtimeConfig.copy(shutdownHookTimeout = Duration.Zero)
 
-    val run: IO[Unit] =
-      IO.blocking(System.exit(0)).uncancelable
+    val run: IO[Unit] = IO(System.exit(0))
   }
 
   object FatalErrorUnsafeRun extends IOApp {
