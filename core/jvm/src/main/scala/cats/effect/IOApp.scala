@@ -194,7 +194,6 @@ trait IOApp {
   private[this] lazy val queue = new ArrayBlockingQueue[AnyRef](32)
 
   private[this] def handleTerminalFailure(t: Throwable): Unit = {
-    if (runtime ne null) runtime.shutdown()
     queue.clear()
     queue.put(t)
   }
@@ -509,7 +508,7 @@ trait IOApp {
 
       // Clean up after ourselves, relevant for running IOApps in sbt,
       // otherwise scheduler threads will accumulate over time.
-      runtime.shutdown()
+      if (!isForked) runtime.shutdown()
     }
 
     val hook = new Thread(() => handleShutdown())
@@ -532,7 +531,7 @@ trait IOApp {
           case ec: ExitCode =>
             // Clean up after ourselves, relevant for running IOApps in sbt,
             // otherwise scheduler threads will accumulate over time.
-            runtime.shutdown()
+            if (!isForked) runtime.shutdown()
             if (ec == ExitCode.Success) {
               // Return naturally from main. This allows any non-daemon
               // threads to gracefully complete their work, and managed

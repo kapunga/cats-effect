@@ -312,7 +312,6 @@ private[effect] final class WorkerThread[P <: AnyRef](
     val self = this
     random = ThreadLocalRandom.current()
     val rnd = random
-    val reportFailure = pool.reportFailure(_)
 
     /*
      * A counter (modulo `ExternalQueueTicks`) which represents the
@@ -424,22 +423,34 @@ private[effect] final class WorkerThread[P <: AnyRef](
       }
     }
 
+    @tailrec
+    def drainReadyEvents(result: PollResult, acc: Boolean): Boolean =
+      if (result ne PollResult.Interrupted) {
+        val tasksScheduled = system.processReadyEvents(_poller) | acc
+        if (result eq PollResult.Complete) tasksScheduled
+        else drainReadyEvents(system.poll(_poller, 0), tasksScheduled)
+      } else {
+        acc
+      }
+
     // returns true if polled event, false if unparked
     def parkLoop(): Boolean = {
       while (!done.get()) {
         // Park the thread until further notice.
         val start = System.nanoTime()
         metrics.incrementPolledCount()
-        val polled = system.poll(_poller, -1, reportFailure)
+        val pollResult = system.poll(_poller, -1)
         now = System.nanoTime() // update now
         metrics.addIdleTime(now - start)
 
         // the only way we can be interrupted here is if it happened *externally* (probably sbt)
         if (isInterrupted()) {
           pool.shutdown()
-        } else if (polled) {
+        } else if (pollResult ne PollResult.Interrupted) {
           if (parked.getAndSet(false))
             pool.doneSleeping()
+          // TODO, if no tasks scheduled could fastpath back to park?
+          val _ = drainReadyEvents(pollResult, false)
           return true
         } else if (!parked.get()) { // Spurious wakeup check.
           return false
@@ -466,7 +477,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
           if (nanos > 0L) {
             val start = now
             metrics.incrementPolledCount()
-            val polled = system.poll(_poller, nanos, reportFailure)
+            val pollResult = system.poll(_poller, nanos)
             // we already parked and time passed, so update time again
             // it doesn't matter if we timed out or were awakened, the update is free-ish
             now = System.nanoTime()
@@ -477,10 +488,14 @@ private[effect] final class WorkerThread[P <: AnyRef](
               false // we know `done` is `true`
             } else {
               // no matter why we woke up, there may be timers or events ready
+              val polled = pollResult ne PollResult.Interrupted
               if (polled || (triggerTime - now <= 0)) {
                 // we timed out or polled an event
                 if (parked.getAndSet(false)) {
                   pool.doneSleeping()
+                }
+                if (polled) { // TODO, if no tasks scheduled and no timers could fastpath back to park?
+                  val _ = drainReadyEvents(pollResult, false)
                 }
                 true
               } else { // we were either awakened spuriously or intentionally
@@ -581,7 +596,9 @@ private[effect] final class WorkerThread[P <: AnyRef](
           sleepers.packIfNeeded()
           // give the polling system a chance to discover events
           metrics.incrementPolledCount()
-          system.poll(_poller, 0, reportFailure)
+          if (system.needsPoll(_poller)) {
+            val _ = drainReadyEvents(system.poll(_poller, 0), false)
+          }
 
           // Obtain a fiber or batch of fibers from the external queue.
           val element = external.poll(rnd)
