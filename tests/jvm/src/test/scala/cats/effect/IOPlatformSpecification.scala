@@ -452,7 +452,8 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
             reportFailure0 = _.printStackTrace(),
             blockedThreadDetectionEnabled = false,
             shutdownTimeout = 1.second,
-            system = SleepSystem
+            system = SleepSystem,
+            uncaughtExceptionHandler = (_, t) => t.printStackTrace()
           )
 
           val runtime = IORuntime

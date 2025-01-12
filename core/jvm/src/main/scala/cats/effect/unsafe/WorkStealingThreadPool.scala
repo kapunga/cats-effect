@@ -75,7 +75,8 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
     private[unsafe] val blockedThreadDetectionEnabled: Boolean,
     shutdownTimeout: Duration,
     private[unsafe] val system: PollingSystem.WithPoller[P],
-    reportFailure0: Throwable => Unit
+    reportFailure0: Throwable => Unit,
+    private[unsafe] val uncaughtExceptionHandler: Thread.UncaughtExceptionHandler
 ) extends ExecutionContextExecutor
     with Scheduler
     with UnsealedPollingContext[P] {

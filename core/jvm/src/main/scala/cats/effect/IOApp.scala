@@ -193,6 +193,11 @@ trait IOApp {
   // arbitrary constant is arbitrary
   private[this] lazy val queue = new ArrayBlockingQueue[AnyRef](32)
 
+  private[this] def handleTerminalFailure(t: Throwable): Unit = {
+    queue.clear()
+    queue.put(t)
+  }
+
   /**
    * Executes the provided actions on the JVM's `main` thread. Note that this is, by definition,
    * a single-threaded executor, and should not be used for anything which requires a meaningful
@@ -217,8 +222,7 @@ trait IOApp {
               IOApp.this.reportFailure(t).unsafeRunAndForgetWithoutCallback()(runtime)
 
             case t =>
-              queue.clear()
-              queue.put(t)
+              handleTerminalFailure(t)
           }
 
         def execute(r: Runnable): Unit =
@@ -392,7 +396,8 @@ trait IOApp {
             threads = computeWorkerThreadCount,
             reportFailure = t => reportFailure(t).unsafeRunAndForgetWithoutCallback()(runtime),
             blockedThreadDetectionEnabled = blockedThreadDetectionEnabled,
-            pollingSystem = pollingSystem
+            pollingSystem = pollingSystem,
+            uncaughtExceptionHandler = (_, t) => handleTerminalFailure(t)
           )
 
         val (blocking, blockDown) =

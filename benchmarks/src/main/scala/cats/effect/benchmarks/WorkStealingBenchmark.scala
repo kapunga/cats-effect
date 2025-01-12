@@ -173,7 +173,8 @@ class WorkStealingBenchmark {
       false,
       1.second,
       SleepSystem,
-      _.printStackTrace())
+      _.printStackTrace(),
+      (_, t) => t.printStackTrace())
 
     val cancelationCheckThreshold =
       System.getProperty("cats.effect.cancelation.check.threshold", "512").toInt
