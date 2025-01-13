@@ -22,8 +22,8 @@ import scala.concurrent.ExecutionContext
 private[effect] abstract class FiberMonitorPlatform {
   def apply(compute: ExecutionContext): FiberMonitor = {
     if (false) { // LinktimeInfo.debugMode && LinktimeInfo.isWeakReferenceSupported
-      if (compute.isInstanceOf[EventLoopExecutorScheduler[_]]) {
-        val loop = compute.asInstanceOf[EventLoopExecutorScheduler[_]]
+      if (compute.isInstanceOf[EventLoopExecutorScheduler[?]]) {
+        val loop = compute.asInstanceOf[EventLoopExecutorScheduler[?]]
         new FiberMonitorImpl(loop)
       } else {
         new FiberMonitorImpl(null)

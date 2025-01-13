@@ -40,7 +40,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       blockerThreadPrefix: String,
       runtimeBlockingExpiration: Duration,
       reportFailure: Throwable => Unit
-  ): (WorkStealingThreadPool[_], () => Unit) = createWorkStealingComputeThreadPool(
+  ): (WorkStealingThreadPool[?], () => Unit) = createWorkStealingComputeThreadPool(
     threads,
     threadPrefix,
     blockerThreadPrefix,
@@ -57,7 +57,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       runtimeBlockingExpiration: Duration,
       reportFailure: Throwable => Unit,
       blockedThreadDetectionEnabled: Boolean
-  ): (WorkStealingThreadPool[_], () => Unit) = {
+  ): (WorkStealingThreadPool[?], () => Unit) = {
     val (pool, _, shutdown) = createWorkStealingComputeThreadPool(
       threads,
       threadPrefix,
@@ -82,7 +82,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       pollingSystem: PollingSystem = SelectorSystem(),
       uncaughtExceptionHandler: Thread.UncaughtExceptionHandler = (_, ex) =>
         ex.printStackTrace()
-  ): (WorkStealingThreadPool[_], pollingSystem.Api, () => Unit) = {
+  ): (WorkStealingThreadPool[?], pollingSystem.Api, () => Unit) = {
     val threadPool =
       new WorkStealingThreadPool[pollingSystem.Poller](
         threads,
@@ -213,7 +213,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
       threads: Int = Math.max(2, Runtime.getRuntime().availableProcessors()),
       threadPrefix: String = "io-compute",
       blockerThreadPrefix: String = DefaultBlockerPrefix)
-      : (WorkStealingThreadPool[_], () => Unit) =
+      : (WorkStealingThreadPool[?], () => Unit) =
     createWorkStealingComputeThreadPool(
       threads,
       threadPrefix,
@@ -227,7 +227,7 @@ private[unsafe] abstract class IORuntimeCompanionPlatform { this: IORuntime.type
   def createDefaultComputeThreadPool(
       self: () => IORuntime,
       threads: Int,
-      threadPrefix: String): (WorkStealingThreadPool[_], () => Unit) =
+      threadPrefix: String): (WorkStealingThreadPool[?], () => Unit) =
     createDefaultComputeThreadPool(self(), threads, threadPrefix)
 
   def createDefaultBlockingExecutionContext(

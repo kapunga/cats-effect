@@ -61,7 +61,7 @@ object Deferred {
    * Creates an unset Deferred. Every time you bind the resulting `F`, a new Deferred is
    * created. If you want to share one, pass it as an argument and `flatMap` once.
    */
-  def apply[F[_], A](implicit F: GenConcurrent[F, _]): F[Deferred[F, A]] =
+  def apply[F[_], A](implicit F: GenConcurrent[F, ?]): F[Deferred[F, A]] =
     F.deferred[A]
 
   /**

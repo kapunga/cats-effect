@@ -55,7 +55,7 @@ private[effect] final class BatchingMacrotaskExecutor(
    * Whether the `executeBatchTask` needs to be rescheduled
    */
   private[this] var needsReschedule = true
-  private[this] val fibers = new JSArrayQueue[IOFiber[_]]
+  private[this] val fibers = new JSArrayQueue[IOFiber[?]]
 
   private[this] val executeBatchTaskRunnable = new Runnable {
     def run() = {
@@ -93,7 +93,7 @@ private[effect] final class BatchingMacrotaskExecutor(
    * Schedule the `fiber` for the next available batch. This is often the currently executing
    * batch.
    */
-  def schedule(fiber: IOFiber[_]): Unit = {
+  def schedule(fiber: IOFiber[?]): Unit = {
     fibers.offer(fiber)
 
     if (needsReschedule) {
@@ -107,8 +107,8 @@ private[effect] final class BatchingMacrotaskExecutor(
 
   def reportFailure(t: Throwable): Unit = reportFailure0(t)
 
-  def liveTraces(): Map[IOFiber[_], Trace] = {
-    val traces = Map.newBuilder[IOFiber[_], Trace]
+  def liveTraces(): Map[IOFiber[?], Trace] = {
+    val traces = Map.newBuilder[IOFiber[?], Trace]
     fibers.foreach(f => if (!f.isDone) traces += f -> f.captureTrace())
     fiberBag.foreach(f => if (!f.isDone) traces += f -> f.captureTrace())
     traces.result()
@@ -118,7 +118,7 @@ private[effect] final class BatchingMacrotaskExecutor(
     if (LinkingInfo.developmentMode)
       if (fiberBag ne null)
         runnable match {
-          case r: IOFiber[_] =>
+          case r: IOFiber[?] =>
             fiberBag += r
             () => {
               // We have to remove r _before_ running it, b/c it may be re-enqueued while running
@@ -135,7 +135,7 @@ private[effect] final class BatchingMacrotaskExecutor(
   private[this] val fiberBag =
     if (LinkingInfo.developmentMode)
       if (TracingConstants.isStackTracing && FiberMonitor.weakRefsAvailable)
-        mutable.Set.empty[IOFiber[_]]
+        mutable.Set.empty[IOFiber[?]]
       else
         null
     else

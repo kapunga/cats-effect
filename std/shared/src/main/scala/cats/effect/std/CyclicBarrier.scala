@@ -55,7 +55,7 @@ abstract class CyclicBarrier[F[_]] { self =>
 }
 
 object CyclicBarrier {
-  def apply[F[_]](capacity: Int)(implicit F: GenConcurrent[F, _]): F[CyclicBarrier[F]] = {
+  def apply[F[_]](capacity: Int)(implicit F: GenConcurrent[F, ?]): F[CyclicBarrier[F]] = {
     if (capacity < 1)
       throw new IllegalArgumentException(
         s"Cyclic barrier constructed with capacity $capacity. Must be > 0")

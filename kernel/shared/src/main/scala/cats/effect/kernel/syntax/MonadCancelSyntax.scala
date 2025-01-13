@@ -36,22 +36,22 @@ trait MonadCancelSyntax {
 final class MonadCancelOps_[F[_], A] private[syntax] (private val wrapped: F[A])
     extends AnyVal {
 
-  def forceR[B](fb: F[B])(implicit F: MonadCancel[F, _]): F[B] =
+  def forceR[B](fb: F[B])(implicit F: MonadCancel[F, ?]): F[B] =
     F.forceR(wrapped)(fb)
 
-  def !>[B](fb: F[B])(implicit F: MonadCancel[F, _]): F[B] =
+  def !>[B](fb: F[B])(implicit F: MonadCancel[F, ?]): F[B] =
     forceR(fb)
 
-  def uncancelable(implicit F: MonadCancel[F, _]): F[A] =
+  def uncancelable(implicit F: MonadCancel[F, ?]): F[A] =
     F.uncancelable(_ => wrapped)
 
-  def onCancel(fin: F[Unit])(implicit F: MonadCancel[F, _]): F[A] =
+  def onCancel(fin: F[Unit])(implicit F: MonadCancel[F, ?]): F[A] =
     F.onCancel(wrapped, fin)
 
-  def guarantee(fin: F[Unit])(implicit F: MonadCancel[F, _]): F[A] =
+  def guarantee(fin: F[Unit])(implicit F: MonadCancel[F, ?]): F[A] =
     F.guarantee(wrapped, fin)
 
-  def bracket[B](use: A => F[B])(release: A => F[Unit])(implicit F: MonadCancel[F, _]): F[B] =
+  def bracket[B](use: A => F[B])(release: A => F[Unit])(implicit F: MonadCancel[F, ?]): F[B] =
     F.bracket(wrapped)(use)(release)
 }
 

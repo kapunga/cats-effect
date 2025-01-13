@@ -28,7 +28,7 @@
 
 package cats.effect.unsafe.ref
 
-private[unsafe] class WeakReference[T](referent: T, q: ReferenceQueue[_ >: T])
+private[unsafe] class WeakReference[T](referent: T, q: ReferenceQueue[? >: T])
     extends Reference[T](referent, q) {
 
   def this(referent: T) = this(referent, null)

@@ -42,7 +42,7 @@ object pure {
   }
 
   final case class FiberCtx[E](
-      self: PureFiber[E, _],
+      self: PureFiber[E, ?],
       masks: List[MaskId] = Nil,
       finalizers: List[PureConc[E, Unit]] = Nil)
 

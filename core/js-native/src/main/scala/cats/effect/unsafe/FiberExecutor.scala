@@ -21,5 +21,5 @@ package unsafe
  * An introspectable executor that runs fibers. Useful for fiber dumps.
  */
 private[unsafe] trait FiberExecutor {
-  def liveTraces(): Map[IOFiber[_], Trace]
+  def liveTraces(): Map[IOFiber[?], Trace]
 }
