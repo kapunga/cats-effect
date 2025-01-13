@@ -218,8 +218,8 @@ object Queue {
    * @return
    *   an empty, bounded, sliding queue
    */
-  def circularBuffer[F[_], A](capacity: Int)(
-      implicit F: GenConcurrent[F, _]): F[Queue[F, A]] = {
+  def circularBuffer[F[_], A](
+      capacity: Int)(implicit F: GenConcurrent[F, _]): F[Queue[F, A]] = {
     assertPositive(capacity, "CircularBuffer")
     F.ref(State.empty[F, A]).map(new CircularBufferQueue(capacity, _))
   }
