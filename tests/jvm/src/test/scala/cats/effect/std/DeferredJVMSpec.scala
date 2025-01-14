@@ -71,7 +71,7 @@ abstract class BaseDeferredJVMTests(parallelism: Int)
   val iterations = if (isCI) 1000 else 10000
   val timeout = if (isCI) 30.seconds else 10.seconds
 
-  def cleanupOnError[A](task: IO[A], f: FiberIO[_]) =
+  def cleanupOnError[A](task: IO[A], f: FiberIO[?]) =
     task guaranteeCase {
       case Outcome.Canceled() | Outcome.Errored(_) =>
         f.cancel

@@ -247,7 +247,7 @@ object Dispatcher {
       parallel: Boolean,
       await: Boolean,
       cancelable: Boolean): Resource[F, Dispatcher[F]] = {
-    val always = Some((_: Outcome[F, Throwable, _]) => true)
+    val always = Some((_: Outcome[F, Throwable, ?]) => true)
 
     // the outer supervisor is for the worker fibers
     // the inner supervisor is for tasks (if parallel) and finalizers
@@ -338,7 +338,7 @@ object Dispatcher {
                       @tailrec
                       def cancel(): Future[Unit] = {
                         stateR.get() match {
-                          case u: RegState.Unstarted[_] =>
+                          case u: RegState.Unstarted[?] =>
                             val latch = Promise[Unit]()
                             if (stateR.compareAndSet(u, RegState.CancelRequested(latch))) {
                               latch.future
@@ -346,7 +346,7 @@ object Dispatcher {
                               cancel()
                             }
 
-                          case r: RegState.Running[_] =>
+                          case r: RegState.Running[?] =>
                             val cancel = r.cancel // indirection needed for Scala 2.12
 
                             val latch = Promise[Unit]()

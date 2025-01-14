@@ -44,8 +44,8 @@ private[effect] sealed abstract class WorkStealingThreadPool[P] private ()
 }
 
 private[effect] sealed abstract class WorkerThread[P] private () extends Thread {
-  private[unsafe] def isOwnedBy(threadPool: WorkStealingThreadPool[_]): Boolean
+  private[unsafe] def isOwnedBy(threadPool: WorkStealingThreadPool[?]): Boolean
   private[unsafe] def monitor(fiber: Runnable): WeakBag.Handle
   private[unsafe] def index: Int
-  private[effect] var currentIOFiber: IOFiber[_]
+  private[effect] var currentIOFiber: IOFiber[?]
 }

@@ -247,12 +247,12 @@ object WorkStealingPoolMetrics {
 
   private[metrics] def apply(ec: ExecutionContext): Option[WorkStealingPoolMetrics] =
     ec match {
-      case wstp: WorkStealingThreadPool[_] => Some(workStealingThreadPoolMetrics(wstp))
+      case wstp: WorkStealingThreadPool[?] => Some(workStealingThreadPoolMetrics(wstp))
       case _ => None
     }
 
   private def workStealingThreadPoolMetrics(
-      wstp: WorkStealingThreadPool[_ <: AnyRef]
+      wstp: WorkStealingThreadPool[? <: AnyRef]
   ): WorkStealingPoolMetrics = new WorkStealingPoolMetrics {
     val identifier =
       wstp.id.toString

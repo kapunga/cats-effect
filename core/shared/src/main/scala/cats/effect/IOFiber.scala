@@ -961,10 +961,10 @@ private final class IOFiber[A](
                   val scheduler = runtime.scheduler
 
                   val cancelIO =
-                    if (scheduler.isInstanceOf[WorkStealingThreadPool[_]]) {
+                    if (scheduler.isInstanceOf[WorkStealingThreadPool[?]]) {
                       val cancel =
                         scheduler
-                          .asInstanceOf[WorkStealingThreadPool[_]]
+                          .asInstanceOf[WorkStealingThreadPool[?]]
                           .sleepInternal(delay, cb)
                       IO.Delay(cancel, null)
                     } else {
@@ -1011,8 +1011,8 @@ private final class IOFiber[A](
 
           if (cur.hint eq IOFiber.TypeBlocking) {
             val ec = currentCtx
-            if (ec.isInstanceOf[WorkStealingThreadPool[_]]) {
-              val wstp = ec.asInstanceOf[WorkStealingThreadPool[_]]
+            if (ec.isInstanceOf[WorkStealingThreadPool[?]]) {
+              val wstp = ec.asInstanceOf[WorkStealingThreadPool[?]]
               if (wstp.canExecuteBlockingCode()) {
                 wstp.prepareForBlocking()
 
@@ -1329,10 +1329,10 @@ private final class IOFiber[A](
     }
   }
 
-  private[this] def rescheduleFiber(ec: ExecutionContext, fiber: IOFiber[_]): Unit = {
+  private[this] def rescheduleFiber(ec: ExecutionContext, fiber: IOFiber[?]): Unit = {
     if (Platform.isJvm) {
-      if (ec.isInstanceOf[WorkStealingThreadPool[_]]) {
-        val wstp = ec.asInstanceOf[WorkStealingThreadPool[_]]
+      if (ec.isInstanceOf[WorkStealingThreadPool[?]]) {
+        val wstp = ec.asInstanceOf[WorkStealingThreadPool[?]]
         wstp.reschedule(fiber)
       } else {
         scheduleOnForeignEC(ec, fiber)
@@ -1342,10 +1342,10 @@ private final class IOFiber[A](
     }
   }
 
-  private[this] def scheduleFiber(ec: ExecutionContext, fiber: IOFiber[_]): Unit = {
+  private[this] def scheduleFiber(ec: ExecutionContext, fiber: IOFiber[?]): Unit = {
     if (Platform.isJvm) {
-      if (ec.isInstanceOf[WorkStealingThreadPool[_]]) {
-        val wstp = ec.asInstanceOf[WorkStealingThreadPool[_]]
+      if (ec.isInstanceOf[WorkStealingThreadPool[?]]) {
+        val wstp = ec.asInstanceOf[WorkStealingThreadPool[?]]
         wstp.execute(fiber)
       } else {
         scheduleOnForeignEC(ec, fiber)
@@ -1362,7 +1362,7 @@ private final class IOFiber[A](
     }
   }
 
-  private[this] def scheduleOnForeignEC(ec: ExecutionContext, fiber: IOFiber[_]): Unit = {
+  private[this] def scheduleOnForeignEC(ec: ExecutionContext, fiber: IOFiber[?]): Unit = {
     try {
       ec.execute(fiber)
     } catch {
@@ -1572,19 +1572,19 @@ private object IOFiber {
   @static private[IOFiber] val OutcomeCanceled = Outcome.Canceled()
   @static private[effect] val RightUnit = Right(())
 
-  @static private[this] val threadLocal = new ThreadLocal[IOFiber[_]]
-  @static def currentIOFiber(): IOFiber[_] = {
+  @static private[this] val threadLocal = new ThreadLocal[IOFiber[?]]
+  @static def currentIOFiber(): IOFiber[?] = {
     val thread = Thread.currentThread()
-    if (thread.isInstanceOf[WorkerThread[_]])
-      thread.asInstanceOf[WorkerThread[_]].currentIOFiber
+    if (thread.isInstanceOf[WorkerThread[?]])
+      thread.asInstanceOf[WorkerThread[?]].currentIOFiber
     else
       threadLocal.get()
   }
 
-  @static private def setCurrentIOFiber(f: IOFiber[_]): Unit = {
+  @static private def setCurrentIOFiber(f: IOFiber[?]): Unit = {
     val thread = Thread.currentThread()
-    if (thread.isInstanceOf[WorkerThread[_]])
-      thread.asInstanceOf[WorkerThread[_]].currentIOFiber = f
+    if (thread.isInstanceOf[WorkerThread[?]])
+      thread.asInstanceOf[WorkerThread[?]].currentIOFiber = f
     else
       threadLocal.set(f)
   }

@@ -24,7 +24,7 @@ private[tracing] abstract class TracingPlatform { self: Tracing.type =>
 
   import TracingConstants._
 
-  private[this] val cache = mutable.Map.empty[Class[_], TracingEvent].withDefaultValue(null)
+  private[this] val cache = mutable.Map.empty[Class[?], TracingEvent].withDefaultValue(null)
 
   def calculateTracingEvent(key: Any): TracingEvent =
     if (LinktimeInfo.debugMode) {

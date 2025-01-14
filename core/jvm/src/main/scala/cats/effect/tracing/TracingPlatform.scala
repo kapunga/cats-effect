@@ -24,7 +24,7 @@ private[tracing] abstract class TracingPlatform extends ClassValue[TracingEvent]
 
   import TracingConstants._
 
-  override protected def computeValue(cls: Class[_]): TracingEvent = {
+  override protected def computeValue(cls: Class[?]): TracingEvent = {
     buildEvent()
   }
 

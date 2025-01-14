@@ -186,7 +186,7 @@ trait GenConcurrent[F[_], E] extends GenSpawn[F, E] {
 
 object GenConcurrent {
   def apply[F[_], E](implicit F: GenConcurrent[F, E]): F.type = F
-  def apply[F[_]](implicit F: GenConcurrent[F, _], d: DummyImplicit): F.type = F
+  def apply[F[_]](implicit F: GenConcurrent[F, ?], d: DummyImplicit): F.type = F
 
   private sealed abstract class Memoize[F[_], E, A]
   private object Memoize {

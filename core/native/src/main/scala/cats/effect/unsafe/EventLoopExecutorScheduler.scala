@@ -161,10 +161,10 @@ private[effect] final class EventLoopExecutorScheduler[P](
 
   def shutdown(): Unit = system.close()
 
-  def liveTraces(): Map[IOFiber[_], Trace] = {
-    val builder = Map.newBuilder[IOFiber[_], Trace]
+  def liveTraces(): Map[IOFiber[?], Trace] = {
+    val builder = Map.newBuilder[IOFiber[?], Trace]
     executeQueue.forEach {
-      case f: IOFiber[_] => builder += f -> f.captureTrace()
+      case f: IOFiber[?] => builder += f -> f.captureTrace()
       case _ => ()
     }
     builder.result()

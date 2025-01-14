@@ -470,7 +470,7 @@ trait MonadCancel[F[_], E] extends MonadError[F, E] {
 object MonadCancel {
 
   def apply[F[_], E](implicit F: MonadCancel[F, E]): F.type = F
-  def apply[F[_]](implicit F: MonadCancel[F, _], d: DummyImplicit): F.type = F
+  def apply[F[_]](implicit F: MonadCancel[F, ?], d: DummyImplicit): F.type = F
 
   implicit def monadCancelForOptionT[F[_], E](
       implicit F0: MonadCancel[F, E]): MonadCancel[OptionT[F, *], E] =

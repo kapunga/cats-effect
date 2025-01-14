@@ -510,7 +510,7 @@ object GenSpawn {
   }
 
   def apply[F[_], E](implicit F: GenSpawn[F, E]): F.type = F
-  def apply[F[_]](implicit F: GenSpawn[F, _], d: DummyImplicit): F.type = F
+  def apply[F[_]](implicit F: GenSpawn[F, ?], d: DummyImplicit): F.type = F
 
   implicit def genSpawnForOptionT[F[_], E](
       implicit F0: GenSpawn[F, E]): GenSpawn[OptionT[F, *], E] =

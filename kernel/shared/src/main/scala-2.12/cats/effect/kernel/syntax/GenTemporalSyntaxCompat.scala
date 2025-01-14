@@ -29,21 +29,21 @@ private[syntax] trait GenTemporalOps_CompanionCompat {
       wrapped: F[A],
       duration: FiniteDuration,
       fallback: F[A],
-      F: GenTemporal[F, _]): F[A] =
+      F: GenTemporal[F, ?]): F[A] =
     F.timeoutTo(wrapped, duration, fallback)
 
   @deprecated("Preserved for binary-compatibility", "3.4.0")
   def delayBy$extension[F[_], A](
       wrapped: F[A],
       duration: FiniteDuration,
-      F: GenTemporal[F, _]): F[A] =
+      F: GenTemporal[F, ?]): F[A] =
     F.delayBy(wrapped, duration)
 
   @deprecated("Preserved for binary-compatibility", "3.4.0")
   def andWait$extension[F[_], A](
       wrapped: F[A],
       duration: FiniteDuration,
-      F: GenTemporal[F, _]): F[A] =
+      F: GenTemporal[F, ?]): F[A] =
     F.andWait(wrapped, duration)
 
 }

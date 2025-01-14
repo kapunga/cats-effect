@@ -2268,7 +2268,7 @@ object IO extends IOCompanionPlatform with IOLowPriorityImplicits with TuplePara
   }
   private[effect] object Uncancelable {
     // INTERNAL, it's only created by the runloop itself during the execution of `Uncancelable`
-    final case class UnmaskRunLoop[+A](ioa: IO[A], id: Int, self: IOFiber[_]) extends IO[A] {
+    final case class UnmaskRunLoop[+A](ioa: IO[A], id: Int, self: IOFiber[?]) extends IO[A] {
       def tag = 13
     }
   }

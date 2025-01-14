@@ -58,7 +58,7 @@ object Backpressure {
   def apply[F[_]](
       strategy: Strategy,
       bound: Int
-  )(implicit GC: GenConcurrent[F, _]): F[Backpressure[F]] = {
+  )(implicit GC: GenConcurrent[F, ?]): F[Backpressure[F]] = {
     require(bound > 0)
     val notAcquired: F[None.type] = GC.pure(None)
 

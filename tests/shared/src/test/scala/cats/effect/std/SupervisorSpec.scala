@@ -38,7 +38,7 @@ class SupervisorSpec extends BaseSpec with DetectPlatform {
   private def supervisorTests(
       constructor: (
           Boolean,
-          Option[Outcome[IO, Throwable, _] => Boolean]) => Resource[IO, Supervisor[IO]])
+          Option[Outcome[IO, Throwable, ?] => Boolean]) => Resource[IO, Supervisor[IO]])
       : Fragments = {
 
     "start a fiber that completes successfully" in ticked { implicit ticker =>

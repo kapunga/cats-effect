@@ -37,7 +37,7 @@ import scala.scalajs.js
  */
 private[unsafe] abstract class Reference[T] private[ref] (
     referent: T,
-    queue: ReferenceQueue[_ >: T]) {
+    queue: ReferenceQueue[? >: T]) {
   private[this] var weakRef = new js.WeakRef(referent)
   var enqueued: Boolean = false
 

@@ -32,7 +32,7 @@ class SyntaxSpec extends Specification {
     Semaphore[F](15)
   }
 
-  def genConcurrent[F[_]](implicit F: GenConcurrent[F, _]) = {
+  def genConcurrent[F[_]](implicit F: GenConcurrent[F, ?]) = {
     Ref.of[F, Int](0)
     Deferred[F, Unit]
   }

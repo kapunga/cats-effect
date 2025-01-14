@@ -112,7 +112,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
   private val indexTransfer: LinkedTransferQueue[Integer] = new LinkedTransferQueue()
   private[this] val runtimeBlockingExpiration: Duration = pool.runtimeBlockingExpiration
 
-  private[effect] var currentIOFiber: IOFiber[_] = _
+  private[effect] var currentIOFiber: IOFiber[?] = _
 
   private[this] val RightUnit = Right(())
   private[this] val noop = new Function0[Unit] with Runnable {
@@ -236,7 +236,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
    *   `true` if this worker thread is owned by the provided work stealing thread pool, `false`
    *   otherwise
    */
-  def isOwnedBy(threadPool: WorkStealingThreadPool[_]): Boolean =
+  def isOwnedBy(threadPool: WorkStealingThreadPool[?]): Boolean =
     (pool eq threadPool) && !blocking
 
   /**
@@ -251,7 +251,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
    *   `true` if this worker thread is owned by the provided work stealing thread pool, `false`
    *   otherwise
    */
-  def canExecuteBlockingCodeOn(threadPool: WorkStealingThreadPool[_]): Boolean =
+  def canExecuteBlockingCodeOn(threadPool: WorkStealingThreadPool[?]): Boolean =
     pool eq threadPool
 
   /**

@@ -35,10 +35,10 @@ trait GenSpawnSyntax {
 
 final class GenSpawnOps_[F[_], A] private[syntax] (private val wrapped: F[A]) extends AnyVal {
 
-  def race[B](another: F[B])(implicit F: GenSpawn[F, _]) =
+  def race[B](another: F[B])(implicit F: GenSpawn[F, ?]) =
     F.race(wrapped, another)
 
-  def both[B](another: F[B])(implicit F: GenSpawn[F, _]): F[(A, B)] =
+  def both[B](another: F[B])(implicit F: GenSpawn[F, ?]): F[(A, B)] =
     F.both(wrapped, another)
 }
 
