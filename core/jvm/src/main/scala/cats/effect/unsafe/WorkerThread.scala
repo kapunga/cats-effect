@@ -561,7 +561,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
           false
         }
       } else {
-        false
+        true
       }
     }
 
