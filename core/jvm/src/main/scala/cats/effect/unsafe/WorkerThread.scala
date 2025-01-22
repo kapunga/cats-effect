@@ -317,7 +317,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
     val done = pool.done
 
-    /**
+    /*
      * This method is called when the local queue is empty, and will return
      *
      * 0: Fall back to checking the external queue after a failed dequeue from the local queue.
