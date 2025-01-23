@@ -27,7 +27,11 @@ jobs:
     name: Test
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-14]
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - macos-14
         scala: [3.3.4, 2.12.20, 2.13.15]
         java:
           - temurin@8
@@ -81,6 +85,8 @@ jobs:
             java: temurin@21
           - ci: ciJS
             java: graalvm@21
+          - os: ubuntu-24.04-arm
+            ci: ciJS
           - os: windows-latest
             ci: ciJS
           - os: macos-14
@@ -93,6 +99,8 @@ jobs:
             java: temurin@21
           - ci: ciFirefox
             java: graalvm@21
+          - os: ubuntu-24.04-arm
+            ci: ciFirefox
           - os: windows-latest
             ci: ciFirefox
           - os: macos-14
@@ -105,18 +113,57 @@ jobs:
             java: temurin@21
           - ci: ciChrome
             java: graalvm@21
+          - os: ubuntu-24.04-arm
+            ci: ciChrome
           - os: windows-latest
             ci: ciChrome
           - os: macos-14
             ci: ciChrome
           - ci: ciNative
             java: temurin@11
+            os: ubuntu-latest
+          - ci: ciNative
+            java: temurin@11
+            os: ubuntu-24.04-arm
+          - ci: ciNative
+            java: temurin@11
+            os: windows-latest
+          - ci: ciNative
+            java: temurin@11
+            os: macos-14
           - ci: ciNative
             java: temurin@17
+            os: ubuntu-latest
+          - ci: ciNative
+            java: temurin@17
+            os: windows-latest
           - ci: ciNative
             java: temurin@21
+            os: ubuntu-latest
+          - ci: ciNative
+            java: temurin@21
+            os: ubuntu-24.04-arm
+          - ci: ciNative
+            java: temurin@21
+            os: windows-latest
+          - ci: ciNative
+            java: temurin@21
+            os: macos-14
           - ci: ciNative
             java: graalvm@21
+            os: ubuntu-latest
+          - ci: ciNative
+            java: graalvm@21
+            os: ubuntu-24.04-arm
+          - ci: ciNative
+            java: graalvm@21
+            os: windows-latest
+          - ci: ciNative
+            java: graalvm@21
+            os: macos-14
+          - os: ubuntu-24.04-arm
+            ci: ciNative
+            scala: 2.12.20
           - os: windows-latest
             ci: ciNative
           - os: macos-14
