@@ -598,7 +598,11 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
               pool.execute(mkExternalWork)
               latch.countDown()
             }
-            latch.await() // wait until next task is in external queue
+            try {
+              latch.await() // wait until next task is in external queue
+            } catch {
+              case _: InterruptedException => // ignore, runtime is shutting down
+            }
           }
 
           val test = IO(mkExternalWork.run()) *>
