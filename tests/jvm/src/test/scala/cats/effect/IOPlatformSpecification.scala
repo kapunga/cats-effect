@@ -616,6 +616,29 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
         }
       }
 
+      "blocking work does not starve poll" in {
+
+        val (pool, poller, shutdown) = IORuntime.createWorkStealingComputeThreadPool(
+          threads = 1,
+          pollingSystem = DummySystem)
+
+        implicit val runtime: IORuntime =
+          IORuntime.builder().setCompute(pool, shutdown).addPoller(poller, () => ()).build()
+
+        try {
+          def mkBlockingWork: IO[Unit] = IO.defer(mkBlockingWork.start) *> IO.blocking(())
+
+          val test = mkBlockingWork *>
+            IO.pollers.map(_.head.asInstanceOf[DummyPoller]).flatMap { poller =>
+              poller.poll.as(true)
+            }
+
+          test.unsafeRunTimed(1.second) must beSome(beTrue)
+        } finally {
+          runtime.shutdown()
+        }
+      }
+
       if (javaMajorVersion >= 21)
         "block in-place on virtual threads" in real {
           val loomExec = classOf[Executors]
