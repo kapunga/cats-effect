@@ -109,7 +109,7 @@ ThisBuild / developers := List(
 )
 
 val PrimaryOS = "ubuntu-latest"
-val ArmOS = "ubuntu-24.04-arm"
+val ArmOS = "ubuntu-22.04-arm"
 val Windows = "windows-latest"
 val MacOS = "macos-14"
 
