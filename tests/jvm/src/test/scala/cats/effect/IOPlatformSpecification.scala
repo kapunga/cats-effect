@@ -630,7 +630,7 @@ trait IOPlatformSpecification extends DetectPlatform { self: BaseSpec with Scala
 
           val test = mkBlockingWork *>
             IO.pollers.map(_.head.asInstanceOf[DummyPoller]).flatMap { poller =>
-              poller.poll.as(true)
+              poller.poll.replicateA_(100).as(true)
             }
 
           test.unsafeRunTimed(1.second) must beSome(beTrue)
