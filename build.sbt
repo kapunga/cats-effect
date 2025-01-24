@@ -239,7 +239,10 @@ ThisBuild / githubWorkflowBuildMatrixExclusions := {
       Seq(
         MatrixExclude(Map("os" -> Windows, "scala" -> scala, "ci" -> CI.JVM.command)),
         MatrixExclude(Map("os" -> MacOS, "scala" -> scala, "ci" -> CI.JVM.command)))
-    } :+ MatrixExclude(Map("os" -> MacOS, "java" -> OldGuardJava.render))
+    } ++ Seq(
+      MatrixExclude(Map("os" -> MacOS, "java" -> OldGuardJava.render)),
+      MatrixExclude(Map("os" -> MacOS, "java" -> LTSJava.render))
+    )
 
   val jsScalaFilters = for {
     scala <- (ThisBuild / githubWorkflowScalaVersions).value.filterNot(Set(Scala213))

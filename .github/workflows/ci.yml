@@ -81,6 +81,8 @@ jobs:
             ci: ciJVM
           - os: macos-14
             java: temurin@8
+          - os: macos-14
+            java: temurin@11
           - ci: ciFirefox
             scala: 3.3.4
           - ci: ciChrome
