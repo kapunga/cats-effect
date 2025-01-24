@@ -55,6 +55,18 @@ jobs:
             java: temurin@21
           - scala: 2.12.20
             java: graalvm@21
+          - os: ubuntu-24.04-arm
+            java: temurin@8
+            ci: ciJVM
+          - os: ubuntu-24.04-arm
+            java: temurin@11
+            ci: ciJVM
+          - os: ubuntu-24.04-arm
+            java: temurin@21
+            ci: ciJVM
+          - os: ubuntu-24.04-arm
+            java: graalvm@21
+            ci: ciJVM
           - os: windows-latest
             scala: 3.3.4
             ci: ciJVM

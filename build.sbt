@@ -278,7 +278,7 @@ ThisBuild / githubWorkflowBuildMatrixExclusions := {
     javaFilters ++ osFilters
   }
 
-  scalaJavaFilters ++ windowsAndMacScalaFilters ++ jsScalaFilters ++ jsJavaAndOSFilters ++ nativeJavaAndOSFilters
+  scalaJavaFilters ++ armFilters ++ windowsAndMacScalaFilters ++ jsScalaFilters ++ jsJavaAndOSFilters ++ nativeJavaAndOSFilters
 }
 
 lazy val useJSEnv =
