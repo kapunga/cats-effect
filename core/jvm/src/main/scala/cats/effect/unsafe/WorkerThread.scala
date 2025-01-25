@@ -914,7 +914,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
         val idx = index
         pool.replaceWorker(idx, cached)
         // Transfer the data structures to the cached thread and wake it up.
-        cached.indexTransfer.offer(idx)
+        val _ = cached.indexTransfer.offer(idx)
       } else {
         // Spawn a new `WorkerThread`, a literal clone of this one. It is safe to
         // transfer ownership of the local queue and the parked signal to the new
