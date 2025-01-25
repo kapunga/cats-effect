@@ -231,7 +231,7 @@ ThisBuild / githubWorkflowBuildMatrixExclusions := {
 
   val armFilters =
     (ThisBuild / githubWorkflowJavaVersions).value.filterNot(Set(LatestJava)).map { java =>
-      MatrixExclude(Map("os" -> ArmOS, "java" -> java.render, "ci" -> CI.JVM.command))
+      MatrixExclude(Map("os" -> ArmOS, "java" -> java.render))
     }
 
   val windowsAndMacScalaFilters =
