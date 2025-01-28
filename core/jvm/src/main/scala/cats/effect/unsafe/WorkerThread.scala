@@ -317,7 +317,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
     val done = pool.done
 
-    /**
+    /*
      * This method is called when the local queue is empty, and will return only when work is
      * found.
      *
