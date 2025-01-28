@@ -424,50 +424,51 @@ private[effect] final class WorkerThread[P <: AnyRef](
             // update the current time
             now = System.nanoTime()
 
-            // First try to steal some expired timers:
-            if (pool.stealTimers(now, rnd)) {
-              // some stolen timer created new work for us
+            // First try to steal some expired timers.
+            val stoleTimers = pool.stealTimers(now, rnd)
+
+            // Try stealing fibers from other worker threads.
+            val fiber = pool.stealFromOtherWorkerThread(index, rnd, self)
+
+            if (stoleTimers || (fiber ne null)) {
+              // Successful steal. Announce that the current thread is no longer
+              // looking for work.
               pool.transitionWorkerFromSearching(rnd)
-              return
-            } else {
-              // Try stealing fibers from other worker threads.
-              val fiber = pool.stealFromOtherWorkerThread(index, rnd, self)
+
               if (fiber ne null) {
-                // Successful steal. Announce that the current thread is no longer
-                // looking for work.
-                pool.transitionWorkerFromSearching(rnd)
                 // Run the stolen fiber.
                 try fiber.run()
                 catch {
                   case t if NonFatal(t) => pool.reportFailure(t)
                   case t: Throwable => IOFiber.onFatalFailure(t)
                 }
-                // Transition to executing fibers from the local queue.
-                return
-              } else {
-                // Stealing attempt is unsuccessful. Park.
-                // Set the worker thread parked signal.
-                if (isStackTracing) {
-                  _active = null
-                }
-
-                parked.lazySet(true)
-                // Announce that the worker thread which was searching for work is now
-                // parking. This checks if the parking worker thread was the last
-                // actively searching thread.
-                if (pool.transitionWorkerToParkedWhenSearching()) {
-                  // If this was indeed the last actively searching thread, do another
-                  // global check of the pool. Other threads might be busy with their
-                  // local queues or new work might have arrived on the external
-                  // queue. Another thread might be able to help.
-                  pool.notifyIfWorkPending(rnd)
-                }
-                // Park the thread.
-                if (park())
-                  return // Work found, transition to executing fibers from the local queue.
-                else
-                  state = 2
               }
+
+              // Transition to executing fibers from the local queue.
+              return
+            } else {
+              // Stealing attempt is unsuccessful. Park.
+              // Set the worker thread parked signal.
+              if (isStackTracing) {
+                _active = null
+              }
+
+              parked.lazySet(true)
+              // Announce that the worker thread which was searching for work is now
+              // parking. This checks if the parking worker thread was the last
+              // actively searching thread.
+              if (pool.transitionWorkerToParkedWhenSearching()) {
+                // If this was indeed the last actively searching thread, do another
+                // global check of the pool. Other threads might be busy with their
+                // local queues or new work might have arrived on the external
+                // queue. Another thread might be able to help.
+                pool.notifyIfWorkPending(rnd)
+              }
+              // Park the thread.
+              if (park())
+                return // Work found, transition to executing fibers from the local queue.
+              else
+                state = 2
             }
 
           case 2 =>
