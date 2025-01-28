@@ -129,7 +129,10 @@ object Queue {
    */
   def unsafeBounded[F[_], A](capacity: Int)(
       implicit F: Async[F]): F[unsafe.BoundedQueue[F, A]] = {
-    require(capacity > 1 && capacity < Short.MaxValue.toInt * 2)
+    require(
+      capacity > 1 && capacity < Short.MaxValue.toInt * 2,
+      "capacity must be > 1 and < 32768"
+    )
     F.delay(new BoundedAsyncQueue(capacity))
   }
 
@@ -509,7 +512,7 @@ object Queue {
       implicit F: GenConcurrent[F, ?]
   ) extends AbstractQueue(capacity, state) {
 
-    require(capacity > 0)
+    require(capacity > 0, "capacity must be > 0")
 
     protected def onOfferNoCapacity(
         s: State[F, A],
@@ -595,7 +598,7 @@ object Queue {
   private abstract class BaseBoundedAsyncQueue[F[_], A](capacity: Int)(implicit F: Async[F])
       extends Queue[F, A] {
 
-    require(capacity > 1)
+    require(capacity > 1, "capacity must be > 1")
 
     protected[this] val buffer = new UnsafeBounded[A](capacity)
 
@@ -1009,7 +1012,7 @@ object Queue {
 
   // ported with love from https://github.com/JCTools/JCTools/blob/master/jctools-core/src/main/java/org/jctools/queues/MpmcArrayQueue.java
   private[effect] final class UnsafeBounded[A](bound: Int) {
-    require(bound > 1)
+    require(bound > 1, "bound must be > 1")
 
     private[this] val buffer = new Array[AnyRef](bound)
 
