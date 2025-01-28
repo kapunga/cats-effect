@@ -118,7 +118,7 @@ final class TestContext private (_seed: Long) extends ExecutionContext { self =>
   }
 
   def advance(time: FiniteDuration): Unit = {
-    require(time > Duration.Zero)
+    require(time > Duration.Zero, "time must be > 0")
     stateRef.currentNanos.addAndGet(time.toNanos)
     ()
   }
