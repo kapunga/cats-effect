@@ -317,212 +317,264 @@ private[effect] final class WorkerThread[P <: AnyRef](
 
     val done = pool.done
 
-    /*
-     * This method is called when the local queue is empty, and will return
+    /**
+     * This method is called when the local queue is empty, and will return only when work is
+     * found.
      *
-     * 0: Fall back to checking the external queue after a failed dequeue from the local queue.
-     * Depending on the outcome of this check, the `WorkerThread` transitions to executing
-     * fibers from the local queue in the case of a successful dequeue from the external queue
-     * (state value 4 and larger). Otherwise, the `WorkerThread` continues with asking for
-     * permission to steal from other `WorkerThread`s.
+     * STEP 1: Fall back to checking the external queue after a failed dequeue from the local
+     * queue. Depending on the outcome of this check, the `WorkerThread` transitions to
+     * executing fibers from the local queue in the case of a successful dequeue from the
+     * external queue. Otherwise, the `WorkerThread` continues with asking for permission to
+     * steal from other `WorkerThread`s.
      *
      * Depending on the outcome of this request, the `WorkerThread` starts looking for fibers to
-     * steal from the local queues of other worker threads (if permission was granted, state
-     * value 2), or parks directly. In this case, there is less bookkeeping to be done compared
-     * to the case where a worker was searching for work prior to parking. After the worker
-     * thread has been unparked, it transitions to looking for work in the external queue (state
-     * value 3) while also holding a permission to steal fibers from other worker threads.
+     * steal from the local queues of other worker threads (if permission was granted), or parks
+     * directly. In this case, there is less bookkeeping to be done compared to the case where a
+     * worker was searching for work prior to parking.
      *
-     * 1: The `WorkerThread` has been allowed to steal fibers from other worker threads. If the
-     * attempt is successful, the first fiber is executed directly and the `WorkerThread`
-     * transitions to executing fibers from the local queue (state value 4 and larger). If the
-     * attempt is unsuccessful, the worker thread announces to the pool that it was unable to
-     * find any work and parks.
+     * STEP 2 (conditional): The `WorkerThread` has been allowed to steal fibers from other
+     * worker threads. If the attempt is successful, the first fiber is executed directly and
+     * the `WorkerThread` transitions to executing fibers from the local queue. If the attempt
+     * is unsuccessful, the worker thread announces to the pool that it was unable to find any
+     * work and parks.
      *
-     * 2: The `WorkerThread` has been unparked an is looking for work in the external queue. If
-     * it manages to find work there, it announces to the work stealing thread pool that it is
-     * no longer searching for work and continues to execute fibers from the local queue (state
-     * value 4 and larger). Otherwise, it transitions to searching for work to steal from the
-     * local queues of other worker threads because the permission to steal is implicitly held
-     * by threads that have been unparked (state value 2).
+     * STEP 3 (while loop): After the worker thread has been unparked, it transitions to looking
+     * for work in the external queue while also holding a permission to steal fibers from other
+     * worker threads.
      *
-     * A note on the implementation. Some of the states seem like they have overlapping logic.
+     * STEP 3.1: The `WorkerThread` has been unparked an is looking for work in the external
+     * queue. If it manages to find work there, it announces to the work stealing thread pool
+     * that it is no longer searching for work and continues to execute fibers from the local
+     * queue. Otherwise, it transitions to searching for work to steal from the local queues of
+     * other worker threads because the permission to steal is implicitly held by threads that
+     * have been unparked.
+     *
+     * STEP 3.2: The `WorkerThread` has been allowed to steal fibers from other worker threads.
+     * If the attempt is successful, the first fiber is executed directly and the `WorkerThread`
+     * transitions to executing fibers from the local queue. If the attempt is unsuccessful, the
+     * worker thread announces to the pool that it was unable to find any work and parks.
+     *
+     * A note on the implementation. Some of the steps seem like they have overlapping logic.
      * This is indeed true, but it is a conscious decision. The logic is carefully unrolled and
-     * compiled into a shallow `tableswitch` instead of a deeply nested sequence of `if/else`
-     * statements. This change has lead to a non-negligible 15-20% increase in single-threaded
-     * performance.
+     * compiled into a shallow while loop.
      */
     def lookForWork(): Unit = {
-      var state = 0
+      val permissionToSteal = {
+        // Check the external queue after a failed dequeue from the local
+        // queue (due to the local queue being empty).
+        val element = external.poll(rnd)
+        if (element.isInstanceOf[Array[Runnable]]) {
+          val batch = element.asInstanceOf[Array[Runnable]]
+          // The dequeued element was a batch of fibers. Enqueue the whole
+          // batch on the local queue and execute the first fiber.
+          // It is safe to directly enqueue the whole batch because we know
+          // that in this state of the worker thread state machine, the
+          // local queue is empty.
+          val fiber = queue.enqueueBatch(batch, self)
+          // Many fibers have been exchanged between the external and the
+          // local queue. Notify other worker threads.
+          pool.notifyParked(rnd)
+          try fiber.run()
+          catch {
+            case t if NonFatal(t) => pool.reportFailure(t)
+            case t: Throwable => IOFiber.onFatalFailure(t)
+          }
+
+          // Transition to executing fibers from the local queue.
+          return
+        } else if (element.isInstanceOf[Runnable]) {
+          val fiber = element.asInstanceOf[Runnable]
+
+          if (isStackTracing) {
+            _active = fiber
+            parked.lazySet(false)
+          }
+
+          // The dequeued element is a single fiber. Execute it immediately.
+          try fiber.run()
+          catch {
+            case t if NonFatal(t) => pool.reportFailure(t)
+            case t: Throwable => IOFiber.onFatalFailure(t)
+          }
+
+          // Transition to executing fibers from the local queue.
+          return
+        } else {
+          // Could not find any fibers in the external queue. Proceed to ask
+          // for permission to steal fibers from other `WorkerThread`s.
+          if (pool.transitionWorkerToSearching()) {
+            // Permission granted, proceed to steal.
+            true
+          } else {
+            // Permission denied, proceed to park.
+            // Set the worker thread parked signal.
+            if (isStackTracing) {
+              _active = null
+            }
+
+            parked.lazySet(true)
+            // Announce that the worker thread is parking.
+            pool.transitionWorkerToParked()
+            // Park the thread.
+            if (park())
+              return // Work found, transition to executing fibers from the local queue.
+            else
+              false
+          }
+        }
+      }
+
+      if (permissionToSteal) {
+        // update the current time
+        now = System.nanoTime()
+
+        // First try to steal some expired timers.
+        val stoleTimers = pool.stealTimers(now, rnd)
+
+        // Try stealing fibers from other worker threads.
+        val fiber = pool.stealFromOtherWorkerThread(index, rnd, self)
+
+        if (stoleTimers || (fiber ne null)) {
+          // Successful steal. Announce that the current thread is no longer
+          // looking for work.
+          pool.transitionWorkerFromSearching(rnd)
+
+          if (fiber ne null) {
+            // Run the stolen fiber.
+            try fiber.run()
+            catch {
+              case t if NonFatal(t) => pool.reportFailure(t)
+              case t: Throwable => IOFiber.onFatalFailure(t)
+            }
+          }
+
+          // Transition to executing fibers from the local queue.
+          return
+        } else {
+          // Stealing attempt is unsuccessful. Park.
+          // Set the worker thread parked signal.
+          if (isStackTracing) {
+            _active = null
+          }
+
+          parked.lazySet(true)
+          // Announce that the worker thread which was searching for work is now
+          // parking. This checks if the parking worker thread was the last
+          // actively searching thread.
+          if (pool.transitionWorkerToParkedWhenSearching()) {
+            // If this was indeed the last actively searching thread, do another
+            // global check of the pool. Other threads might be busy with their
+            // local queues or new work might have arrived on the external
+            // queue. Another thread might be able to help.
+            pool.notifyIfWorkPending(rnd)
+          }
+          // Park the thread.
+          if (park())
+            return // Work found, transition to executing fibers from the local queue.
+          else
+            () // Proceed to while loop.
+        }
+      }
+
       while (!done.get()) {
-        (state: @switch) match {
-          case 0 =>
-            // Check the external queue after a failed dequeue from the local
-            // queue (due to the local queue being empty).
-            val element = external.poll(rnd)
-            if (element.isInstanceOf[Array[Runnable]]) {
-              val batch = element.asInstanceOf[Array[Runnable]]
-              // The dequeued element was a batch of fibers. Enqueue the whole
-              // batch on the local queue and execute the first fiber.
-              // It is safe to directly enqueue the whole batch because we know
-              // that in this state of the worker thread state machine, the
-              // local queue is empty.
-              val fiber = queue.enqueueBatch(batch, self)
-              // Many fibers have been exchanged between the external and the
-              // local queue. Notify other worker threads.
-              pool.notifyParked(rnd)
-              try fiber.run()
-              catch {
-                case t if NonFatal(t) => pool.reportFailure(t)
-                case t: Throwable => IOFiber.onFatalFailure(t)
-              }
+        // Check the external queue after being unparked
+        val element = external.poll(rnd)
+        if (element.isInstanceOf[Array[Runnable]]) {
+          val batch = element.asInstanceOf[Array[Runnable]]
+          // Announce that the current thread is no longer looking for work.
+          pool.transitionWorkerFromSearching(rnd)
 
-              // Transition to executing fibers from the local queue.
-              return
-            } else if (element.isInstanceOf[Runnable]) {
-              val fiber = element.asInstanceOf[Runnable]
+          // The dequeued element was a batch of fibers. Enqueue the whole
+          // batch on the local queue and execute the first fiber.
+          // It is safe to directly enqueue the whole batch because we know
+          // that in this state of the worker thread state machine, the
+          // local queue is empty.
+          val fiber = queue.enqueueBatch(batch, self)
+          // Many fibers have been exchanged between the external and the
+          // local queue. Notify other worker threads.
+          pool.notifyParked(rnd)
+          try fiber.run()
+          catch {
+            case t if NonFatal(t) => pool.reportFailure(t)
+            case t: Throwable => IOFiber.onFatalFailure(t)
+          }
 
-              if (isStackTracing) {
-                _active = fiber
-                parked.lazySet(false)
-              }
+          // Transition to executing fibers from the local queue.
+          return
+        } else if (element.isInstanceOf[Runnable]) {
+          val fiber = element.asInstanceOf[Runnable]
+          // Announce that the current thread is no longer looking for work.
 
-              // The dequeued element is a single fiber. Execute it immediately.
-              try fiber.run()
-              catch {
-                case t if NonFatal(t) => pool.reportFailure(t)
-                case t: Throwable => IOFiber.onFatalFailure(t)
-              }
+          if (isStackTracing) {
+            _active = fiber
+            parked.lazySet(false)
+          }
 
-              // Transition to executing fibers from the local queue.
-              return
-            } else {
-              // Could not find any fibers in the external queue. Proceed to ask
-              // for permission to steal fibers from other `WorkerThread`s.
-              if (pool.transitionWorkerToSearching()) {
-                // Permission granted, proceed to steal.
-                state = 1
-              } else {
-                // Permission denied, proceed to park.
-                // Set the worker thread parked signal.
-                if (isStackTracing) {
-                  _active = null
-                }
+          pool.transitionWorkerFromSearching(rnd)
 
-                parked.lazySet(true)
-                // Announce that the worker thread is parking.
-                pool.transitionWorkerToParked()
-                // Park the thread.
-                if (park())
-                  return // Work found, transition to executing fibers from the local queue.
-                else
-                  state = 2
-              }
+          // The dequeued element is a single fiber. Execute it immediately.
+          try fiber.run()
+          catch {
+            case t if NonFatal(t) => pool.reportFailure(t)
+            case t: Throwable => IOFiber.onFatalFailure(t)
+          }
+
+          // Transition to executing fibers from the local queue.
+          return
+        }
+
+        // Transition to stealing fibers from other `WorkerThread`s.
+        // The permission is held implicitly by threads right after they
+        // have been woken up.
+
+        // update the current time
+        now = System.nanoTime()
+
+        // First try to steal some expired timers.
+        val stoleTimers = pool.stealTimers(now, rnd)
+
+        // Try stealing fibers from other worker threads.
+        val fiber = pool.stealFromOtherWorkerThread(index, rnd, self)
+
+        if (stoleTimers || (fiber ne null)) {
+          // Successful steal. Announce that the current thread is no longer
+          // looking for work.
+          pool.transitionWorkerFromSearching(rnd)
+
+          if (fiber ne null) {
+            // Run the stolen fiber.
+            try fiber.run()
+            catch {
+              case t if NonFatal(t) => pool.reportFailure(t)
+              case t: Throwable => IOFiber.onFatalFailure(t)
             }
+          }
 
-          case 1 =>
-            // update the current time
-            now = System.nanoTime()
+          // Transition to executing fibers from the local queue.
+          return
+        } else {
+          // Stealing attempt is unsuccessful. Park.
+          // Set the worker thread parked signal.
+          if (isStackTracing) {
+            _active = null
+          }
 
-            // First try to steal some expired timers.
-            val stoleTimers = pool.stealTimers(now, rnd)
-
-            // Try stealing fibers from other worker threads.
-            val fiber = pool.stealFromOtherWorkerThread(index, rnd, self)
-
-            if (stoleTimers || (fiber ne null)) {
-              // Successful steal. Announce that the current thread is no longer
-              // looking for work.
-              pool.transitionWorkerFromSearching(rnd)
-
-              if (fiber ne null) {
-                // Run the stolen fiber.
-                try fiber.run()
-                catch {
-                  case t if NonFatal(t) => pool.reportFailure(t)
-                  case t: Throwable => IOFiber.onFatalFailure(t)
-                }
-              }
-
-              // Transition to executing fibers from the local queue.
-              return
-            } else {
-              // Stealing attempt is unsuccessful. Park.
-              // Set the worker thread parked signal.
-              if (isStackTracing) {
-                _active = null
-              }
-
-              parked.lazySet(true)
-              // Announce that the worker thread which was searching for work is now
-              // parking. This checks if the parking worker thread was the last
-              // actively searching thread.
-              if (pool.transitionWorkerToParkedWhenSearching()) {
-                // If this was indeed the last actively searching thread, do another
-                // global check of the pool. Other threads might be busy with their
-                // local queues or new work might have arrived on the external
-                // queue. Another thread might be able to help.
-                pool.notifyIfWorkPending(rnd)
-              }
-              // Park the thread.
-              if (park())
-                return // Work found, transition to executing fibers from the local queue.
-              else
-                state = 2
-            }
-
-          case 2 =>
-            // Check the external queue after being unparked
-            val element = external.poll(rnd)
-            if (element.isInstanceOf[Array[Runnable]]) {
-              val batch = element.asInstanceOf[Array[Runnable]]
-              // Announce that the current thread is no longer looking for work.
-              pool.transitionWorkerFromSearching(rnd)
-
-              // The dequeued element was a batch of fibers. Enqueue the whole
-              // batch on the local queue and execute the first fiber.
-              // It is safe to directly enqueue the whole batch because we know
-              // that in this state of the worker thread state machine, the
-              // local queue is empty.
-              val fiber = queue.enqueueBatch(batch, self)
-              // Many fibers have been exchanged between the external and the
-              // local queue. Notify other worker threads.
-              pool.notifyParked(rnd)
-              try fiber.run()
-              catch {
-                case t if NonFatal(t) => pool.reportFailure(t)
-                case t: Throwable => IOFiber.onFatalFailure(t)
-              }
-
-              // Transition to executing fibers from the local queue.
-              return
-            } else if (element.isInstanceOf[Runnable]) {
-              val fiber = element.asInstanceOf[Runnable]
-              // Announce that the current thread is no longer looking for work.
-
-              if (isStackTracing) {
-                _active = fiber
-                parked.lazySet(false)
-              }
-
-              pool.transitionWorkerFromSearching(rnd)
-
-              // The dequeued element is a single fiber. Execute it immediately.
-              try fiber.run()
-              catch {
-                case t if NonFatal(t) => pool.reportFailure(t)
-                case t: Throwable => IOFiber.onFatalFailure(t)
-              }
-
-              // Transition to executing fibers from the local queue.
-              return
-            } else {
-              // Transition to stealing fibers from other `WorkerThread`s.
-              // The permission is held implicitly by threads right after they
-              // have been woken up.
-              state = 1
-            }
-          case _ => throw new AssertionError
+          parked.lazySet(true)
+          // Announce that the worker thread which was searching for work is now
+          // parking. This checks if the parking worker thread was the last
+          // actively searching thread.
+          if (pool.transitionWorkerToParkedWhenSearching()) {
+            // If this was indeed the last actively searching thread, do another
+            // global check of the pool. Other threads might be busy with their
+            // local queues or new work might have arrived on the external
+            // queue. Another thread might be able to help.
+            pool.notifyIfWorkPending(rnd)
+          }
+          // Park the thread.
+          if (park())
+            return // Work found, transition to executing fibers from the local queue.
+          else
+            () // loop
         }
       }
     }
