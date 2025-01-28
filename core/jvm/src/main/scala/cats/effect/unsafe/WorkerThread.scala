@@ -27,7 +27,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
 
 import java.lang.Long.MIN_VALUE
-import java.util.concurrent.{LinkedTransferQueue, ThreadLocalRandom}
+import java.util.concurrent.{ArrayBlockingQueue, ThreadLocalRandom}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import WorkerThread.Metrics
@@ -109,7 +109,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
    */
   private[this] var _active: Runnable = _
 
-  private val indexTransfer: LinkedTransferQueue[Integer] = new LinkedTransferQueue()
+  private val indexTransfer: ArrayBlockingQueue[Integer] = new ArrayBlockingQueue(1)
   private[this] val runtimeBlockingExpiration: Duration = pool.runtimeBlockingExpiration
 
   private[effect] var currentIOFiber: IOFiber[?] = _
@@ -948,7 +948,7 @@ private[effect] final class WorkerThread[P <: AnyRef](
         val idx = index
         pool.replaceWorker(idx, cached)
         // Transfer the data structures to the cached thread and wake it up.
-        cached.indexTransfer.transfer(idx)
+        val _ = cached.indexTransfer.offer(idx)
       } else {
         // Spawn a new `WorkerThread`, a literal clone of this one. It is safe to
         // transfer ownership of the local queue and the parked signal to the new
