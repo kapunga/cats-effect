@@ -21,10 +21,10 @@ import scala.util.control.ControlThrowable
 
 /**
  * An alternative to [[scala.util.control.NonFatal]] that does not treat
- * [[InterruptedException]] as fatal intended for the exclusive use of the Cats-Effect runtime.
- * It is not recommended to treat interrupts as non-fatal in application code, as handling
- * interrupts gracefully is the responsibility of the runtime, so [[UnsafeNonFatal]] should only
- * be used in the fiber runtime.
+ * [[InterruptedException]] as fatal. This is intended for the exclusive use of the Cats-Effect
+ * runtime. It is not recommended to treat interrupts as non-fatal in application code, as
+ * handling interrupts gracefully is the responsibility of the runtime, so [[UnsafeNonFatal]]
+ * should only be used in the fiber runtime.
  */
 object UnsafeNonFatal {
 
