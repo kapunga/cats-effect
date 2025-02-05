@@ -166,6 +166,7 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
       val thread =
         new WorkerThread(
           index,
+          0,
           queue,
           parkedSignal,
           externalQueue,
@@ -174,6 +175,7 @@ private[effect] final class WorkStealingThreadPool[P <: AnyRef](
           system,
           poller,
           metrics,
+          new WorkerThread.TransferState,
           this)
 
       workerThreads.set(i, thread)
